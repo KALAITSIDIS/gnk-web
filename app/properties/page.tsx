@@ -9,8 +9,14 @@ export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Properties",
+  // NOT "every property carries a written view from the adviser who holds it".
+  // lib/views.ts is empty, so that was true of zero of the published listings —
+  // and unlike the on-page copy it went out in search results and every shared
+  // link, where nobody could see it was false. It may only come back when
+  // adviserViews covers every published reference: metadata must never lead the
+  // state of that file.
   description:
-    "Current mandates in Paphos and across Cyprus. Every property carries a written view from the adviser who holds it.",
+    "Current mandates in Paphos and across Cyprus. We will tell you what we think a property is worth and why, in writing.",
 };
 
 /**
