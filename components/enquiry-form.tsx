@@ -5,6 +5,7 @@ import Link from "next/link";
 import { site } from "@/lib/site";
 import {
   AREAS,
+  messageBudget,
   DEED_STATUSES,
   LISTED_ELSEWHERE,
   PROPERTY_TYPES,
@@ -173,7 +174,7 @@ export function EnquiryForm({
           <textarea
             name="message"
             rows={4}
-            maxLength={5000}
+            maxLength={messageBudget(seller)}
             className="w-full border border-line bg-surface p-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent"
           />
         </label>

@@ -186,7 +186,15 @@ export async function submitEnquiry(
       return { ok: false, error: "Too many enquiries from this address. Please try again shortly." };
     }
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    return { ok: false, error: body.error ?? "That enquiry could not be sent." };
+    /* The CRM's own words are for us, not for the person filling the form: a
+       400 from its validator reads "Too big: expected string to have <=5000
+       characters", which tells a seller nothing they can act on and looks
+       broken. Logged in full, shown as a sentence. */
+    console.error("[crm] enquiry refused:", res.status, body.error);
+    return {
+      ok: false,
+      error: "That enquiry could not be sent. Please call or WhatsApp us instead.",
+    };
   } catch (err) {
     console.error("[crm] enquiry failed:", err);
     return { ok: false, error: "That enquiry could not be sent. Please call or WhatsApp us." };
