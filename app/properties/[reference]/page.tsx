@@ -17,6 +17,7 @@ import {
   vatLabel,
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
+import { adviserView } from "@/lib/views";
 import { site } from "@/lib/site";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -71,7 +72,12 @@ export default async function PropertyPage({
   const images = l.images ?? [];
   const cover = images.find((i) => i.is_cover) ?? images[0];
   const rest = images.filter((i) => i !== cover).slice(0, 6);
-  const judgement = text(l.short_description);
+  /* Two different things that were being conflated. `summary` is the feed's
+     one-line description — useful, but written to describe, not to judge. The
+     adviser's view is a judgement, and only exists where a principal has
+     written one. */
+  const summary = text(l.short_description);
+  const view = adviserView(l.reference);
   const body = text(l.public_description);
 
   /* The measurements a buyer compares on, and the ones a Cyprus buyer asks
@@ -105,7 +111,7 @@ export default async function PropertyPage({
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
     name: titleOf(l),
-    description: judgement || body.slice(0, 300) || placeLine(l),
+    description: summary || body.slice(0, 300) || placeLine(l),
     url: `/properties/${l.reference}`,
     image: images.map((i) => i.card).filter(Boolean),
     ...(l.asking_price
@@ -185,12 +191,22 @@ export default async function PropertyPage({
 
       <div className="mt-12 grid gap-12 lg:grid-cols-[1.4fr_1fr] lg:items-start">
         <div>
-          {judgement ? (
+          {view ? (
             <section className="border-l-2 border-accent pl-5">
               <p className="eyebrow">Our view</p>
-              <p className="mt-2 font-display text-xl text-ink">{judgement}</p>
+              <p className="mt-2 font-display text-xl text-ink">{view}</p>
               {/* TODO: byline of the principal who holds the mandate, once the
                   CRM's assigned agent is exposed on the public feed. */}
+            </section>
+          ) : summary && !body.toLowerCase().startsWith(summary.toLowerCase().slice(0, 60)) ? (
+            /* No adviser note yet. The feed's line still earns its place as a
+               summary — but in body type, under an honest heading, and without
+               the accent rule that marks this firm's own judgement. The prefix
+               guard stops it repeating the paragraph directly below it, which
+               is exactly what PAF0003 did. */
+            <section>
+              <p className="eyebrow">Summary</p>
+              <p className="mt-2 text-ink-2">{summary}</p>
             </section>
           ) : null}
 

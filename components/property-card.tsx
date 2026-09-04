@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Listing } from "@/lib/crm";
 import { area, coverImage, deedLabel, label, placeLine, priceLabel, text, titleOf } from "@/lib/format";
+import { adviserView } from "@/lib/views";
 
 /**
  * The card, in the anatomy this market has converged on: photograph, price
@@ -9,9 +10,13 @@ import { area, coverImage, deedLabel, label, placeLine, priceLabel, text, titleO
  * BuySell all read in that order, so a buyer arriving from any of them can
  * scan this one without relearning it.
  *
- * The line of judgement under the specification is the part none of them has.
- * A portal cannot write one — it is paid by whoever lists — which is exactly
- * why it belongs here.
+ * The line under the specification is the part none of them has — but only
+ * when it is genuinely the adviser's, which is why it takes lib/views.ts first
+ * and falls back to the feed's summary. The accent rule marks a judgement, so
+ * it is reserved for one: the same styling on a portal-register line ("prime
+ * residential land... excellent development potential") claims something the
+ * sentence does not deliver, and a seller judges how this firm would market
+ * their property by looking at how it markets other people's.
  *
  * Sized large on purpose: four cards at this scale fill a screen properly,
  * where four thin MLS rows would advertise how few there are.
@@ -19,7 +24,8 @@ import { area, coverImage, deedLabel, label, placeLine, priceLabel, text, titleO
 export function PropertyCard({ listing, priority = false }: { listing: Listing; priority?: boolean }) {
   const cover = coverImage(listing);
   const photos = listing.images?.length ?? 0;
-  const judgement = text(listing.short_description);
+  const view = adviserView(listing.reference);
+  const summary = text(listing.short_description);
   const deed = deedLabel(listing.title_deed_status);
   const isProject = listing.kind === "project" || listing.kind === "phase";
 
@@ -71,10 +77,12 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
 
         <p className="text-sm text-ink-2">{placeLine(listing)}</p>
 
-        {judgement ? (
+        {view ? (
           <p className="mt-1 border-l-2 border-accent pl-3 text-sm text-ink-2 italic">
-            {judgement}
+            {view}
           </p>
+        ) : summary ? (
+          <p className="mt-1 text-sm text-ink-2">{summary}</p>
         ) : null}
 
         <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
