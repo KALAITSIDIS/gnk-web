@@ -123,7 +123,7 @@ export default function SellingPage() {
 
         <div className="lg:sticky lg:top-8">
           <EnquiryForm
-            seller
+            variant="seller"
             heading="Tell us about your property"
             intro="However much or little you know. One of us will come back to you personally — you will not be handed to an account manager."
             cta="Send"

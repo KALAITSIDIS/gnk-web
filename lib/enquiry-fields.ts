@@ -162,8 +162,8 @@ const TRIMMED_MARK = "\n\n[The rest of this message did not fit — ask them for
  * long description is the part the desk can simply ask them to repeat. A trim
  * is marked, so nobody reads a severed sentence as the whole thought.
  */
-export function assembleMessage(visitorMessage: string | undefined, fields: SellerFields): string {
-  const suffix = [describeProperty(fields), CONSENT_LINE].filter(Boolean).join("\n\n");
+export function assembleMessage(visitorMessage: string | undefined, block: string | null): string {
+  const suffix = [block, CONSENT_LINE].filter(Boolean).join("\n\n");
   const own = (visitorMessage ?? "").trim();
   if (!own) return suffix;
 
@@ -179,19 +179,122 @@ export function assembleMessage(visitorMessage: string | undefined, fields: Sell
  * The server guarantees the cap either way; this stops the form promising a
  * budget the route cannot honour.
  */
-export function messageBudget(seller: boolean): number {
-  if (!seller) return CRM_MESSAGE_CAP - CONSENT_LINE.length - 2;
-  const worst = describeProperty({
-    district: "x".repeat(60),
-    area: "x".repeat(80),
-    property_type: "x".repeat(40),
-    bedrooms: "x".repeat(20),
-    covered_area_sqm: "x".repeat(20),
-    plot_area_sqm: "x".repeat(20),
-    year_built: "x".repeat(20),
-    title_deed_status: "x".repeat(40),
-    listed_elsewhere: "x".repeat(40),
-    timing: "x".repeat(40),
-  });
+export function messageBudget(kind: "buyer" | "seller" | null): number {
+  if (!kind) return CRM_MESSAGE_CAP - CONSENT_LINE.length - 2;
+  const worst =
+    kind === "seller"
+      ? describeProperty({
+          district: "x".repeat(60),
+          area: "x".repeat(80),
+          property_type: "x".repeat(40),
+          bedrooms: "x".repeat(20),
+          covered_area_sqm: "x".repeat(20),
+          plot_area_sqm: "x".repeat(20),
+          year_built: "x".repeat(20),
+          title_deed_status: "x".repeat(40),
+          listed_elsewhere: "x".repeat(40),
+          timing: "x".repeat(40),
+        })
+      : describeRequirement({
+          looking_to: "x".repeat(40),
+          budget: "x".repeat(40),
+          buy_area: "x".repeat(80),
+          buy_property_type: "x".repeat(40),
+          bedrooms_min: "x".repeat(20),
+          deed_required: "x".repeat(40),
+          buy_timing: "x".repeat(40),
+        });
   return CRM_MESSAGE_CAP - (worst ?? "").length - 2 - CONSENT_LINE.length - 2;
+}
+
+/**
+ * What a buyer is looking for, in the CRM's requirement vocabulary.
+ *
+ * gnk-crm/lib/validators/buyer-requirements.ts models far more than this —
+ * bathrooms, plot minimums, VAT preference, required features, delivery dates.
+ * Deliberately not asked here: a public form with fourteen questions is a form
+ * nobody finishes, and the desk can draw the rest out in one conversation.
+ * These seven are the ones that decide whether anything on the book fits, and
+ * they map onto the CRM's fields rather than inventing parallel ones.
+ */
+export const BUYER_KEYS = [
+  "looking_to",
+  "budget",
+  "buy_area",
+  "buy_property_type",
+  "bedrooms_min",
+  "deed_required",
+  "buy_timing",
+] as const;
+
+export interface BuyerFields {
+  looking_to?: string;
+  budget?: string;
+  buy_area?: string;
+  buy_property_type?: string;
+  bedrooms_min?: string;
+  deed_required?: string;
+  buy_timing?: string;
+}
+
+export const LOOKING_TO = [
+  { value: "buy", label: "Buy" },
+  { value: "rent", label: "Rent" },
+  { value: "either", label: "Either — depends on the property" },
+] as const;
+
+/** Bands, not a free number: a buyer who will not type a figure will pick one. */
+export const BUDGETS = [
+  { value: "under_300k", label: "Under €300,000" },
+  { value: "300_500k", label: "€300,000 – €500,000" },
+  { value: "500_750k", label: "€500,000 – €750,000" },
+  { value: "750k_1m", label: "€750,000 – €1m" },
+  { value: "over_1m", label: "Over €1m" },
+  { value: "unsure", label: "Depends on the property" },
+] as const;
+
+/** Cyprus-specific and the reason a deal collapses, so it is worth one field. */
+export const DEED_REQUIRED = [
+  { value: "yes", label: "Yes — separate deed only" },
+  { value: "flexible", label: "Flexible if the position is clear" },
+  { value: "unsure", label: "I am not sure what this means" },
+] as const;
+
+export const BUY_TIMINGS = [
+  { value: "now", label: "Ready now" },
+  { value: "3_months", label: "Within about three months" },
+  { value: "this_year", label: "Sometime this year" },
+  { value: "watching", label: "Watching the market" },
+] as const;
+
+const BUYER_LABELS: Record<keyof BuyerFields, string> = {
+  looking_to: "Looking to",
+  budget: "Budget",
+  buy_area: "Area",
+  buy_property_type: "Property type",
+  bedrooms_min: "Bedrooms (minimum)",
+  deed_required: "Separate title deed",
+  buy_timing: "Timing",
+};
+
+function prettyBuyer(key: keyof BuyerFields, value: string): string {
+  const from = (list: readonly { value: string; label: string }[]) =>
+    list.find((x) => x.value === value)?.label ?? value;
+  if (key === "looking_to") return from(LOOKING_TO);
+  if (key === "budget") return from(BUDGETS);
+  if (key === "deed_required") return from(DEED_REQUIRED);
+  if (key === "buy_timing") return from(BUY_TIMINGS);
+  if (key === "buy_property_type") return value.replace(/_/g, " ");
+  return value;
+}
+
+/** The same shape as describeProperty, for the other side of the transaction. */
+export function describeRequirement(f: BuyerFields): string | null {
+  const lines = (Object.keys(BUYER_LABELS) as (keyof BuyerFields)[])
+    .map((k) => {
+      const v = f[k]?.trim();
+      return v ? BUYER_LABELS[k] + ": " + prettyBuyer(k, v) : null;
+    })
+    .filter((l): l is string => l !== null);
+  return lines.length ? "What they are looking for\n" + lines.join("\n") : null;
 }

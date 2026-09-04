@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { submitEnquiry } from "@/lib/crm";
 import { site } from "@/lib/site";
-import { assembleMessage, SELLER_KEYS, type SellerFields } from "@/lib/enquiry-fields";
+import {
+  assembleMessage,
+  BUYER_KEYS,
+  describeProperty,
+  describeRequirement,
+  SELLER_KEYS,
+  type BuyerFields,
+  type SellerFields,
+} from "@/lib/enquiry-fields";
 
 /**
  * The site's own door, which forwards to the CRM's.
@@ -48,6 +56,15 @@ const schema = z.object({
   title_deed_status: z.string().trim().max(40).optional(),
   listed_elsewhere: z.string().trim().max(40).optional(),
   timing: z.string().trim().max(40).optional(),
+  /* And what a buyer is looking for. Same reasoning: all optional, capped
+     rather than typed, because the contact details are what make a lead. */
+  looking_to: z.string().trim().max(40).optional(),
+  budget: z.string().trim().max(40).optional(),
+  buy_area: z.string().trim().max(80).optional(),
+  buy_property_type: z.string().trim().max(40).optional(),
+  bedrooms_min: z.string().trim().max(20).optional(),
+  deed_required: z.string().trim().max(40).optional(),
+  buy_timing: z.string().trim().max(40).optional(),
 });
 
 
@@ -97,7 +114,7 @@ export async function POST(request: Request) {
       // an unchecked box is absent from the payload entirely
       consent: form.get("consent") !== null,
       website: str("website"),
-      ...Object.fromEntries(SELLER_KEYS.map((k) => [k, str(k)])),
+      ...Object.fromEntries([...SELLER_KEYS, ...BUYER_KEYS].map((k) => [k, str(k)])),
     };
   } else {
     try {
@@ -140,9 +157,14 @@ export async function POST(request: Request) {
          submission could reach 5409 and be refused outright. See
          lib/enquiry-fields.ts. Both submit paths land here, so the JSON and
          no-JavaScript routes produce an identical lead. */
+      /* A form is one side or the other, never both, so whichever block has
+         content is the one that describes this enquiry. */
       message: assembleMessage(
         d.message,
-        Object.fromEntries(SELLER_KEYS.map((k) => [k, d[k]])) as SellerFields,
+        describeProperty(Object.fromEntries(SELLER_KEYS.map((k) => [k, d[k]])) as SellerFields) ??
+          describeRequirement(
+            Object.fromEntries(BUYER_KEYS.map((k) => [k, d[k]])) as BuyerFields,
+          ),
       ),
       property_reference: d.property_reference || undefined,
       website: d.website || undefined,
