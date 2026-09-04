@@ -8,7 +8,8 @@ export const metadata: Metadata = {
 
 /**
  * A launch requirement, not a nice-to-have: the enquiry form collects a name,
- * an email and a phone number, and Cyprus is an EU member state, so GDPR
+ * an email and a phone number — and, since the seller intake shipped, answers
+ * about a property somebody owns — and Cyprus is an EU member state, so GDPR
  * applies at the point of collection.
  *
  * Written to be true of what this site ACTUALLY does — no cookies, no
@@ -44,9 +45,21 @@ export default function LegalPage() {
       <section className="mt-10">
         <h2 className="text-2xl">What we collect, and why</h2>
         <p className="mt-3 text-ink-2">
-          Only what you type into an enquiry form: your name, and an email address or phone
-          number so we can reply, plus whatever you choose to tell us about what you are
-          looking for.
+          What you type into an enquiry form: your name, an email address or a phone number
+          so we can reply, and whatever you choose to tell us — what you are looking for, or,
+          if you are selling, about the property itself.
+        </p>
+        {/* The word "Only" used to stand at the head of that sentence and it was not true.
+            Sending an enquiry also passes the address it came from to our own system, where
+            it is salted and hashed into a short-lived counter. A visitor can already SEE
+            that metering — refuse too many and the form answers "Too many enquiries from
+            this address" — so the notice has to account for it. If the rate limiting ever
+            changes, this paragraph changes with it. */}
+        <p className="mt-3 text-ink-2">
+          Sending the form also tells us the internet address it came from. We never store
+          the address itself — only a scrambled, one-way fingerprint of it, kept briefly so
+          that one person cannot flood the form and block everyone else&apos;s enquiries. It
+          identifies nobody and is not used for anything else.
         </p>
         <p className="mt-3 text-ink-2">
           {/* The off-list brief on /properties repeats these three promises verbatim.
