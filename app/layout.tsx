@@ -4,6 +4,7 @@ import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { SITE_URL } from "@/lib/site-url";
 
 const newsreader = Newsreader({
   subsets: ["latin"],
@@ -18,7 +19,7 @@ const publicSans = Public_Sans({
   display: "swap",
 });
 
-const SITE_URL = process.env.SITE_URL ?? "https://gnk-web.vercel.app";
+
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

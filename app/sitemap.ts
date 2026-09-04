@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getListings } from "@/lib/crm";
 
-const SITE_URL = process.env.SITE_URL ?? "https://gnk-web.vercel.app";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * WITHOUT THIS LINE the promise in the comment below is false.
