@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getListings } from "@/lib/crm";
+import { OrganizationJsonLd } from "@/components/org-json-ld";
 import { site } from "@/lib/site";
 import { PropertySearch } from "@/components/property-search";
 
@@ -21,6 +22,7 @@ export default async function HomePage() {
 
   return (
     <>
+      <OrganizationJsonLd />
       <section className="border-b border-line bg-surface">
         <div className="mx-auto max-w-7xl px-5 pt-14 pb-10 sm:px-8">
           <p className="eyebrow">{site.tagline}</p>

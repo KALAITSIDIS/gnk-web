@@ -10,6 +10,15 @@
  * rather than filled with something invented.
  */
 
+/**
+ * NOTE ON app/icon.svg — the browser-tab mark is a PLACEHOLDER.
+ *
+ * A single letterform in the accent colour, chosen because the alternative was
+ * the browser's generic globe on every tab and bookmark. It is deliberately not
+ * a logo: this file already records that the restrained palette is "the safest
+ * possible host for a brand identity that does not exist yet". Replace it the
+ * day one does, and nothing else needs to change.
+ */
 export const site = {
   name: "GN Kalaitsidis Capital",
   shortName: "Kalaitsidis Capital",

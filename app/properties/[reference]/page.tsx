@@ -20,6 +20,7 @@ import {
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { adviserView } from "@/lib/views";
+import { absolute } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -122,7 +123,9 @@ export default async function PropertyPage({
     "@type": "RealEstateListing",
     name: titleOf(l),
     description: summary || body.slice(0, 300) || placeLine(l),
-    url: `/properties/${l.reference}`,
+    // Absolute: a relative url in structured data is undefined behaviour for
+    // every consumer that reads it away from this page.
+    url: absolute(`/properties/${l.reference}`),
     image: images.map((i) => i.card).filter(Boolean),
     ...(l.asking_price
       ? {
@@ -146,11 +149,32 @@ export default async function PropertyPage({
     ...(l.bedrooms ? { numberOfBedrooms: l.bedrooms } : {}),
   };
 
+  /* Where this page sits, so a search result can show the path rather than a
+     bare URL. Absolute throughout for the same reason the listing url is. */
+  const breadcrumbs = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: absolute("/") },
+      { "@type": "ListItem", position: 2, name: "Properties", item: absolute("/properties") },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: titleOf(l),
+        item: absolute(`/properties/${l.reference}`),
+      },
+    ],
+  };
+
   return (
     <article className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }}
       />
 
       <Link href="/properties" className="text-sm text-ink-2 hover:text-accent">
