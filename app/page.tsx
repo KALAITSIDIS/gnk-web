@@ -46,8 +46,9 @@ export default async function HomePage() {
               the deal in front of them is a good one — including when the answer is no.
             </p>
             <p className="mt-3 text-ink-2">
-              Every property on this site carries a written view. If you cannot see the
-              reasoning, do not act on the number.
+              We will tell you what we think a property is worth and why, in writing, with
+              the comparables behind it. If you cannot see the reasoning, do not act on the
+              number.
             </p>
             <Link
               href="/services"
