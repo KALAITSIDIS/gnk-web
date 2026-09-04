@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getListings } from "@/lib/crm";
+import { EnquiryForm } from "@/components/enquiry-form";
 import { PropertySearch } from "@/components/property-search";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -39,6 +40,37 @@ export default async function PropertiesPage() {
 
       <div className="mt-10">
         <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
+      </div>
+
+      {/* Below the results, not only inside the empty state. With a deliberately
+          short book the commonest thing a visitor thinks is "neither of these is
+          mine" — and the paragraph at the top of this page already promises that
+          the useful conversation starts off-list. This is where that promise is
+          kept, and it has to be reachable by someone who DID find a result and
+          still wants something else. */}
+      <div className="mt-16 border-t border-line pt-12">
+        <div className="grid gap-10 lg:grid-cols-[1fr_1.1fr] lg:items-start">
+          <div>
+            <p className="eyebrow">Off-list</p>
+            <h2 className="mt-2 text-3xl">Tell us what you are actually looking for.</h2>
+            <p className="mt-4 text-ink-2">
+              We take on a small number of mandates at a time, so what is on this page is
+              never the whole market — and a good deal of what we place never appears
+              publicly at all. Tell us the brief and we will come back on what fits,
+              including properties you will not find listed.
+            </p>
+            <p className="mt-3 text-sm text-ink-3">
+              No automated alerts, and nobody else gets your details. One of us reads it and
+              replies.
+            </p>
+          </div>
+          <EnquiryForm
+            variant="buyer"
+            heading="What are you looking for?"
+            intro="Rough answers are fine — this is a starting point for a conversation, not a search filter."
+            cta="Send brief"
+          />
+        </div>
       </div>
     </div>
   );

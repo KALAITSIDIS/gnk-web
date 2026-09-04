@@ -5,6 +5,11 @@ import Link from "next/link";
 import { site } from "@/lib/site";
 import {
   AREAS,
+  BUDGETS,
+  BUYER_KEYS,
+  BUY_TIMINGS,
+  DEED_REQUIRED,
+  LOOKING_TO,
   messageBudget,
   DEED_STATUSES,
   LISTED_ELSEWHERE,
@@ -25,18 +30,20 @@ export function EnquiryForm({
   heading = "Ask about this property",
   intro,
   cta = "Send enquiry",
-  /* An owner describing their own property. Everything else here is identical
-     on purpose: the seller path inherits the no-JavaScript fallback, the send
-     timeout, the focus handling and the email-or-phone guard rather than
-     growing a second copy of them that would drift out of step. */
-  seller = false,
+  /* Which side of the transaction is filling this in, if either. One form,
+     three uses: everything else — the no-JavaScript fallback, the send timeout,
+     the focus handling, the email-or-phone guard, the honeypot — is shared
+     rather than copied into siblings that would drift out of step. */
+  variant,
 }: {
   reference?: string;
   heading?: string;
   intro?: string;
   cta?: string;
-  seller?: boolean;
+  variant?: "buyer" | "seller";
 }) {
+  const seller = variant === "seller";
+  const buyer = variant === "buyer";
   /* Prefilled, because the point of the reference is that the buyer never has
      to describe which property they mean. */
   const waHref = reference
@@ -90,7 +97,9 @@ export function EnquiryForm({
           property_reference: reference,
           consent: form.get("consent") === "on",
           website: form.get("website"),
-          ...Object.fromEntries(SELLER_KEYS.map((k) => [k, form.get(k) ?? ""])),
+          ...Object.fromEntries(
+            [...SELLER_KEYS, ...BUYER_KEYS].map((k) => [k, form.get(k) ?? ""]),
+          ),
         }),
       });
       if (res.ok) {
@@ -174,7 +183,7 @@ export function EnquiryForm({
           <textarea
             name="message"
             rows={4}
-            maxLength={messageBudget(seller)}
+            maxLength={messageBudget(variant ?? null)}
             className="w-full border border-line bg-surface p-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent"
           />
         </label>
@@ -182,8 +191,7 @@ export function EnquiryForm({
 
       {seller ? (
         <fieldset className="mt-6 border-t border-line pt-5">
-          <legend className="sr-only">About the property</legend>
-          <p className="text-sm font-medium text-ink">About the property</p>
+          <legend className="text-sm font-medium text-ink">About the property</legend>
           <p className="mt-1 text-xs text-ink-3">
             Every one of these is optional. Tell us what you know and leave the rest — we
             will ask about anything that matters.
@@ -275,6 +283,95 @@ export function EnquiryForm({
                 {TIMINGS.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </fieldset>
+      ) : null}
+
+      {buyer ? (
+        <fieldset className="mt-6 border-t border-line pt-5">
+          <legend className="text-sm font-medium text-ink">What you are looking for</legend>
+          <p className="mt-1 text-xs text-ink-3">
+            All optional. Even a rough answer helps us tell you about things before they are
+            listed — a good deal of what we place never appears publicly.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Looking to</span>
+              <select name="looking_to" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {LOOKING_TO.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Budget</span>
+              <select name="budget" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {BUDGETS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Area</span>
+              <select name="buy_area" className={field} defaultValue="">
+                <option value="">Anywhere / not sure</option>
+                {Object.entries(AREAS).map(([d, list]) => (
+                  <optgroup key={d} label={d}>
+                    {list.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Property type</span>
+              <select name="buy_property_type" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {PROPERTY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Bedrooms (minimum)</span>
+              <input name="bedrooms_min" maxLength={20} className={field} inputMode="numeric" />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Timing</span>
+              <select name="buy_timing" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {BUY_TIMINGS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="sm:col-span-2">
+              <span className="mb-1 block text-sm text-ink-2">
+                Does it need a separate title deed?
+              </span>
+              <select name="deed_required" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {DEED_REQUIRED.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
