@@ -71,7 +71,13 @@ export default async function PropertyPage({
 
   const images = l.images ?? [];
   const cover = images.find((i) => i.is_cover) ?? images[0];
-  const rest = images.filter((i) => i !== cover).slice(0, 6);
+  /* Every photograph, not the first few: the card badge counts them all, so
+     showing four under a badge reading "6 photos" makes the card lie. The
+     hero composition keeps three beside the cover; the remainder follow in
+     their own row rather than being dropped. */
+  const rest = images.filter((i) => i !== cover);
+  const beside = rest.slice(0, 3);
+  const below = rest.slice(3);
   /* Two different things that were being conflated. `summary` is the feed's
      one-line description — useful, but written to describe, not to judge. The
      adviser's view is a judgement, and only exists where a principal has
@@ -170,9 +176,9 @@ export default async function PropertyPage({
             </span>
           )}
         </div>
-        {rest.length > 0 ? (
+        {beside.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
-            {rest.slice(0, 3).map((img, i) => (
+            {beside.map((img, i) => (
               <div key={i} className="relative aspect-[4/3] overflow-hidden bg-surface-2">
                 {img.card ? (
                   <Image
@@ -188,6 +194,24 @@ export default async function PropertyPage({
           </div>
         ) : null}
       </div>
+
+      {below.length > 0 ? (
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {below.map((img, i) => (
+            <div key={i} className="relative aspect-[4/3] overflow-hidden bg-surface-2">
+              {img.card ? (
+                <Image
+                  src={img.card}
+                  alt={text(img.alt) || `${titleOf(l)} — photograph ${i + 5}`}
+                  fill
+                  sizes="(max-width: 640px) 50vw, 25vw"
+                  className="object-cover"
+                />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mt-12 grid gap-12 lg:grid-cols-[1.4fr_1fr] lg:items-start">
         <div>

@@ -10,7 +10,12 @@
 @theme {
   --color-ink: #16181a;
   --color-ink-2: #4a5157;
-  --color-ink-3: #767f86;
+  /* 4.56:1 on paper and 4.89:1 on surface. The previous #767f86 measured
+     3.80:1, under the 4.5:1 WCAG AA floor for body text — and this token
+     carries the eyebrow labels, the fact-table keys and every placeholder,
+     so it was the site's most-read colour. Same hue and saturation, 10%
+     darker: the restraint survives, the failure does not. */
+  --color-ink-3: #6a7279;
   --color-paper: #f7f7f5;
   --color-surface: #ffffff;
   --color-surface-2: #eeefeb;
