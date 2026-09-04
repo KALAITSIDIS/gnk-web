@@ -97,3 +97,83 @@ export function deedLabel(status: string | null): string | null {
   };
   return map[status] ?? label(status);
 }
+
+/**
+ * VAT, said only where the property itself decides it.
+ *
+ * The CRM stores vat_status as a DECLARATION — someone picked it from a
+ * dropdown, and gnk-crm's own lib/services/vat.ts records that nothing has ever
+ * checked a reduced-rate claim survives contact with the caps. Crucially the
+ * reduced rate turns on the BUYER (first home, residency, no prior claim), not
+ * on the dwelling, so the CRM presents it as conditional and a public page
+ * stating it flatly would be asserting something about a stranger.
+ *
+ * So: the two statuses that are facts about the property are published, and the
+ * two that are not are withheld. `reduced_rate_eligible` is withheld because it
+ * is a claim about the reader; `unknown` because it is an internal sentinel and
+ * "VAT — Unknown" is worse than no row at all. The page already carries the
+ * standing note that VAT varies with the buyer's circumstances, which is the
+ * honest home for what is dropped here.
+ *
+ * Same shape and same reasoning as deedLabel above.
+ */
+export function vatLabel(status: string | null): string | null {
+  const map: Record<string, string> = {
+    resale_no_vat: "Resale — no VAT on the purchase",
+    new_vat: "New build — VAT applies",
+  };
+  return status ? (map[status] ?? null) : null;
+}
+
+/** Build stages that mean the dwelling is not finished yet. */
+const PRE_COMPLETION = new Set([
+  "planning",
+  "permit_applied",
+  "permit_granted",
+  "under_construction",
+  "structure_complete",
+  "finishing",
+]);
+
+/**
+ * Whether this listing is genuinely still being built.
+ *
+ * Construction stage and a delivery date describe a building that does not yet
+ * exist. Published against anything else they state a fact the firm cannot
+ * back: PAF0001 is a completed 2007 villa whose stored status still read
+ * "finishing", so the live page told buyers a nineteen-year-old house would be
+ * delivered in November 2026, directly contradicting its own description.
+ *
+ * A recorded year built means the thing is standing, whatever the stage field
+ * says — that is the check that catches stale data rather than trusting it.
+ * Land is excluded outright: a plot has no construction, and "planning" on a
+ * plot means planning permission, which is a different subject entirely.
+ */
+export function isUnderConstruction(l: Listing): boolean {
+  if (l.property_type === "land") return false;
+  if (l.year_built) return false;
+  return PRE_COMPLETION.has(l.construction_status ?? "");
+}
+
+const DATE_FMT = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+/**
+ * An expected handover, or nothing. Only for something still being built, and
+ * only while the date is still ahead — a delivery date that has already passed
+ * is stale data, and republishing it as a promise is worse than silence.
+ */
+export function deliveryLabel(l: Listing): string | null {
+  if (!isUnderConstruction(l) || !l.delivery_date) return null;
+  const d = new Date(l.delivery_date);
+  if (Number.isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
+  return DATE_FMT.format(d);
+}
+
+/** Build stage, only where it is true and only in the buyer's words. */
+export function constructionLabel(l: Listing): string | null {
+  return isUnderConstruction(l) ? label(l.construction_status) || null : null;
+}

@@ -41,8 +41,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: p === "" ? 1 : p === "/properties" ? 0.9 : 0.6,
   }));
 
-  const listings = await getListings();
-  const listingEntries: MetadataRoute.Sitemap = listings.map((l) => ({
+  const feed = await getListings();
+  if (!feed.ok) {
+    // Deliberately NOT a throw: that would fail the build outright if the CRM
+    // happened to be down at deploy time. A sitemap is a hint, so a property
+    // temporarily absent from it is not deindexed — the next revalidation puts
+    // it back. The 404 in the page route was the dangerous half, and that is
+    // fixed there.
+    console.error("[sitemap] feed unavailable — publishing static pages only");
+    return staticEntries;
+  }
+  const listingEntries: MetadataRoute.Sitemap = feed.listings.map((l) => ({
     url: SITE_URL + "/properties/" + l.reference,
     lastModified: l.updated_at ? new Date(l.updated_at) : undefined,
     changeFrequency: "weekly",

@@ -19,7 +19,16 @@ import { PropertyCard } from "@/components/property-card";
  * prints "All Properties (273)", which is honest at 273 and brutal at four —
  * so there is no result count here either.
  */
-export function PropertySearch({ listings }: { listings: Listing[] }) {
+export function PropertySearch({
+  listings,
+  /** The feed could not be reached. Distinct from an empty book: saying
+   *  "our mandates are being prepared" during a CRM outage is a false
+   *  public statement about the state of the firm. */
+  feedDown = false,
+}: {
+  listings: Listing[];
+  feedDown?: boolean;
+}) {
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
   const [beds, setBeds] = useState("");
@@ -168,12 +177,18 @@ export function PropertySearch({ listings }: { listings: Listing[] }) {
       ) : (
         <div className="mt-8 border border-line bg-surface p-10 text-center">
           <p className="font-display text-xl text-ink">
-            {filtering ? "Nothing here matches that yet." : "Our current mandates are being prepared."}
+            {feedDown
+              ? "Our listings are briefly unavailable."
+              : filtering
+                ? "Nothing here matches that yet."
+                : "Our current mandates are being prepared."}
           </p>
           <p className="mx-auto mt-2 max-w-md text-sm text-ink-2">
-            {filtering
-              ? "We place a great deal off-market. Tell us what you are looking for and we will come back with what fits — including properties never listed publicly."
-              : "Tell us what you are looking for and we will come back with what fits."}
+            {feedDown
+              ? "This is a problem at our end, not a reflection of what we have. Please try again shortly, or tell us what you are looking for and we will come back to you."
+              : filtering
+                ? "We place a great deal off-market. Tell us what you are looking for and we will come back with what fits — including properties never listed publicly."
+                : "Tell us what you are looking for and we will come back with what fits."}
           </p>
           <a
             href="/contact"

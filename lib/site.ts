@@ -121,16 +121,20 @@ export const site = {
    */
   principals: [
     {
-      name: "TODO — principal one",
-      role: "TODO — role",
+      // Null, not a TODO string: a placeholder that is truthy renders, and both
+      // of these were being served to the public as the principals' names and
+      // as <h3> headings in the About page's document outline. Null lets the
+      // pages say "to follow" the way they already do for bio and photograph.
+      name: null as string | null,
+      role: null as string | null,
       bio: null as string | null,
       photo: null as string | null,
       phone: null as string | null,
       email: null as string | null,
     },
     {
-      name: "TODO — principal two",
-      role: "TODO — role",
+      name: null as string | null,
+      role: null as string | null,
       bio: null as string | null,
       photo: null as string | null,
       phone: null as string | null,

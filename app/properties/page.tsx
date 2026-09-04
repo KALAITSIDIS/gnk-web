@@ -19,7 +19,7 @@ export const metadata: Metadata = {
  * that frames a short list as selection reads as curation instead.
  */
 export default async function PropertiesPage() {
-  const listings = await getListings();
+  const feed = await getListings();
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
@@ -32,7 +32,7 @@ export default async function PropertiesPage() {
       </p>
 
       <div className="mt-10">
-        <PropertySearch listings={listings} />
+        <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
       </div>
     </div>
   );
