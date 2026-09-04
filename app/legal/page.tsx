@@ -49,6 +49,10 @@ export default function LegalPage() {
           looking for.
         </p>
         <p className="mt-3 text-ink-2">
+          {/* The off-list brief on /properties repeats these three promises verbatim.
+              Neither wording may be narrowed without the other, and neither may be
+              broadened into an absolute — an earlier version on /properties said "nobody
+              else gets your details", which the Resend leg described below made false. */}
           We use it for one thing — to answer your enquiry and to advise you if you engage
           us. We do not sell it, we do not share it with developers or portals, and we do not
           add you to a mailing list.
