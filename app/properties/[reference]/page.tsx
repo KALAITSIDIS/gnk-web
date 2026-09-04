@@ -5,13 +5,16 @@ import { notFound } from "next/navigation";
 import { getListing, getListings } from "@/lib/crm";
 import {
   area,
+  constructionLabel,
   deedLabel,
+  deliveryLabel,
   label,
   placeLine,
   priceLabel,
   pricePerSqm,
   text,
   titleOf,
+  vatLabel,
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { site } from "@/lib/site";
@@ -22,8 +25,8 @@ import { site } from "@/lib/site";
 export const revalidate = 60;
 
 export async function generateStaticParams() {
-  const listings = await getListings();
-  return listings.map((l) => ({ reference: l.reference }));
+  const feed = await getListings();
+  return feed.ok ? feed.listings.map((l) => ({ reference: l.reference })) : [];
 }
 
 export async function generateMetadata({
@@ -32,8 +35,9 @@ export async function generateMetadata({
   params: Promise<{ reference: string }>;
 }): Promise<Metadata> {
   const { reference } = await params;
-  const l = await getListing(reference);
-  if (!l) return { title: "Property not found" };
+  const found = await getListing(reference);
+  if (!found.ok || !found.listing) return { title: "Property not found" };
+  const l = found.listing;
   const description = text(l.short_description) || text(l.public_description).slice(0, 200) || placeLine(l);
   const cover = (l.images ?? []).find((i) => i.is_cover) ?? (l.images ?? [])[0];
   return {
@@ -53,8 +57,16 @@ export default async function PropertyPage({
   params: Promise<{ reference: string }>;
 }) {
   const { reference } = await params;
-  const l = await getListing(reference);
-  if (!l) notFound();
+  const found = await getListing(reference);
+  /* THE ORDER HERE IS THE POINT. notFound() answers 404, which tells a search
+     engine the property is gone — so it may only ever be reached when the feed
+     ANSWERED and genuinely does not hold this reference. If the feed could not
+     be reached we throw instead: Next then serves the last good copy of this
+     page, or the error boundary, and a live client mandate is never given a
+     404 because of a hiccup at our end. */
+  if (!found.ok) throw new Error(`Feed unavailable; refusing to 404 ${reference}`);
+  if (!found.listing) notFound();
+  const l = found.listing;
 
   const images = l.images ?? [];
   const cover = images.find((i) => i.is_cover) ?? images[0];
@@ -78,9 +90,13 @@ export default async function PropertyPage({
     ["Year built", l.year_built ? String(l.year_built) : null],
     ["Energy class", l.energy_class],
     ["Title deed", deedLabel(l.title_deed_status)],
-    ["Construction", l.construction_status ? label(l.construction_status) : null],
-    ["Delivery", l.delivery_date],
-    ["VAT", l.vat_status ? label(l.vat_status) : null],
+    // These three are withheld unless the property itself settles them — see
+    // constructionLabel / deliveryLabel / vatLabel. Rendering the raw CRM
+    // declarations put a self-contradicting tax statement and an impossible
+    // handover date on a live client mandate.
+    ["Construction", constructionLabel(l)],
+    ["Delivery", deliveryLabel(l)],
+    ["VAT", vatLabel(l.vat_status)],
     ["Distance to sea", l.sea_distance_m ? `${l.sea_distance_m} m` : null],
     ["Reference", l.reference],
   ];

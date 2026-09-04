@@ -47,8 +47,10 @@ export default function AboutPage() {
                   Photograph to follow
                 </div>
               )}
-              <h3 className="mt-5 font-display text-2xl text-ink">{p.name}</h3>
-              <p className="text-sm text-ink-3">{p.role}</p>
+              <h3 className="mt-5 font-display text-2xl text-ink">
+                {p.name ?? <span className="italic text-ink-3">Name to follow</span>}
+              </h3>
+              {p.role ? <p className="text-sm text-ink-3">{p.role}</p> : null}
               <p className="mt-4 text-ink-2">
                 {p.bio ?? (
                   <span className="italic text-ink-3">

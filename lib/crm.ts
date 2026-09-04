@@ -82,30 +82,58 @@ interface FeedResponse {
  * filter without a second call. If the portfolio ever outgrows one page this
  * is where paging goes — the caller's shape does not change.
  *
- * A failure returns an empty list rather than throwing. A site that 500s
- * because the CRM hiccupped is worse than one that shows its other pages and
- * says the listings are briefly unavailable.
+ * A transport failure is REPORTED, not flattened into an empty list. The old
+ * contract returned [] for a 503, a timeout and a genuinely empty book alike,
+ * and every caller then had to guess which had happened — so a feed hiccup made
+ * live client listings answer HTTP 404 (the signal that removes a URL from
+ * Google's index) while the home page announced the firm had no properties.
+ * Callers now get { ok: false } and can say "briefly unavailable", which is
+ * what the paragraph above always claimed happened.
  */
-export async function getListings(): Promise<Listing[]> {
+export type FeedResult = { ok: true; listings: Listing[] } | { ok: false };
+
+/** Long enough for a cold CRM function, short enough that nobody watches a spinner. */
+const FEED_TIMEOUT_MS = 8000;
+
+export async function getListings(): Promise<FeedResult> {
   try {
     const res = await fetch(`${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&limit=100`, {
       next: { revalidate: FEED_REVALIDATE },
+      // Without this a CRM that accepts the connection and never answers hangs
+      // until the platform kills the function, and the visitor gets a 504 on
+      // the home page rather than the graceful degradation below.
+      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.error(`[crm] feed responded ${res.status}`);
-      return [];
+      return { ok: false };
     }
     const body = (await res.json()) as FeedResponse;
-    return Array.isArray(body.listings) ? body.listings : [];
+    if (!Array.isArray(body.listings)) {
+      console.error("[crm] feed body had no listings array");
+      return { ok: false };
+    }
+    return { ok: true, listings: body.listings };
   } catch (err) {
     console.error("[crm] feed unreachable:", err);
-    return [];
+    return { ok: false };
   }
 }
 
-export async function getListing(reference: string): Promise<Listing | null> {
-  const all = await getListings();
-  return all.find((l) => l.reference.toLowerCase() === reference.toLowerCase()) ?? null;
+export type ListingResult = { ok: true; listing: Listing | null } | { ok: false };
+
+/**
+ * One listing, and whether we were able to look.
+ *
+ * The distinction is the whole point: "the feed says there is no PAF0001" is a
+ * 404, and "we could not reach the feed" must never be, because the property is
+ * still for sale and a 404 tells search engines to forget it exists.
+ */
+export async function getListing(reference: string): Promise<ListingResult> {
+  const feed = await getListings();
+  if (!feed.ok) return { ok: false };
+  const wanted = reference.toLowerCase();
+  return { ok: true, listing: feed.listings.find((l) => l.reference.toLowerCase() === wanted) ?? null };
 }
 
 export interface EnquiryInput {
@@ -127,13 +155,31 @@ export type EnquiryResult = { ok: true } | { ok: false; error: string };
  * post (it sends CORS *), but going through the server keeps the honeypot and
  * any future timing check out of reach of whoever is filling the form.
  */
-export async function submitEnquiry(input: EnquiryInput): Promise<EnquiryResult> {
+export async function submitEnquiry(
+  input: EnquiryInput,
+  /**
+   * The visitor's own address, read from the incoming request by the route.
+   *
+   * WITHOUT THIS every enquiry reached the CRM from this site's egress IP, so
+   * the CRM's per-address budget of five became a budget for the entire
+   * internet: the sixth genuine buyer in any quarter of an hour was refused
+   * with "Too many enquiries from this address" — an address that was not
+   * theirs — and a shell loop could hold the firm's only inbound channel shut
+   * for nothing. The CRM still meters this site's transport IP separately, so
+   * forging the header buys a fresh per-visitor budget but not an escape.
+   */
+  clientIp?: string,
+): Promise<EnquiryResult> {
   try {
     const res = await fetch(`${CRM}/api/public/enquiries`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(clientIp ? { "x-gnk-visitor-ip": clientIp } : {}),
+      },
       body: JSON.stringify({ org: ORG, ...input }),
       cache: "no-store",
+      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
     });
     if (res.status === 202) return { ok: true };
     if (res.status === 429) {

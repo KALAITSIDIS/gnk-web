@@ -72,8 +72,11 @@ export default function LegalPage() {
         <h2 className="text-2xl">Where your enquiry goes</h2>
         <p className="mt-3 text-ink-2">
           Into our own client system, hosted in the European Union, where it is visible only
-          to the two of us. Property photographs and listing information on this site are
-          served from the same system.
+          to the two of us. We are also sent an email the moment it arrives, so that one of
+          us replies quickly rather than whenever we next look; that notification contains
+          what you wrote and is delivered by Resend, our email provider. Property
+          photographs and listing information on this site are served from the same client
+          system.
         </p>
       </section>
 

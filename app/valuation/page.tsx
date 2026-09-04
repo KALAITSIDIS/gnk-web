@@ -50,10 +50,13 @@ export default function ValuationPage() {
             <p className="mt-2 text-ink-2">
               The first conversation and an indicative view cost nothing and commit you to
               nothing. If you want the full written valuation with comparables, we will tell
-              you the fee before we start — and if you then sell through us, it comes off the
-              commission.
+              you the fee before we start.
             </p>
-            {/* TODO: confirm the fee position above with the principals before launch. */}
+            {/* The offer to credit the valuation fee against commission was removed on
+                2026-09-04: it was live on the page while the TODO beside it recorded that
+                the principals had never confirmed the fee position, so the firm was
+                publicly offering a commercial term it might not honour. Restore it only
+                once that is agreed in writing. */}
           </section>
         </div>
 

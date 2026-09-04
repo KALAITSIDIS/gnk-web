@@ -17,7 +17,7 @@ export const revalidate = 60;
  * above its own listings.
  */
 export default async function HomePage() {
-  const listings = await getListings();
+  const feed = await getListings();
 
   return (
     <>
@@ -30,7 +30,7 @@ export default async function HomePage() {
           <p className="mt-4 max-w-2xl text-lg text-ink-2">{site.positioning}</p>
 
           <div className="mt-9">
-            <PropertySearch listings={listings} />
+            <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
           </div>
         </div>
       </section>
@@ -46,8 +46,8 @@ export default async function HomePage() {
               the deal in front of them is a good one — including when the answer is no.
             </p>
             <p className="mt-3 text-ink-2">
-              Every property on this site carries a written view, signed by the person who
-              holds the mandate. If you cannot see the reasoning, do not act on the number.
+              Every property on this site carries a written view. If you cannot see the
+              reasoning, do not act on the number.
             </p>
             <Link
               href="/services"
@@ -103,8 +103,10 @@ export default async function HomePage() {
               <div className="placeholder flex h-40 items-center justify-center text-xs">
                 Photograph to follow
               </div>
-              <p className="mt-4 font-display text-lg text-ink">{p.name}</p>
-              <p className="text-sm text-ink-3">{p.role}</p>
+              <p className="mt-4 font-display text-lg text-ink">
+                {p.name ?? <span className="text-ink-3">Name to follow</span>}
+              </p>
+              {p.role ? <p className="text-sm text-ink-3">{p.role}</p> : null}
               <p className="mt-3 text-sm text-ink-2">
                 {p.bio ?? "Biography to follow."}
               </p>

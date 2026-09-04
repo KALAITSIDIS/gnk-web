@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { site } from "@/lib/site";
 
@@ -24,37 +24,66 @@ export function EnquiryForm({
 }) {
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
+  const sentRef = useRef<HTMLDivElement | null>(null);
+
+  /* Submitting blurs the button the browser was focused on, and the form it
+     belonged to is then replaced outright — so without this a screen-reader
+     user is left on a page that silently changed under them and hears nothing
+     at all. role="status" announces it; the focus move gives them somewhere to
+     be. */
+  useEffect(() => {
+    if (state === "sent") sentRef.current?.focus();
+  }, [state]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setState("sending");
     const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/enquiry", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        email: form.get("email"),
-        phone: form.get("phone"),
-        message: form.get("message"),
-        property_reference: reference,
-        consent: form.get("consent") === "on",
-        website: form.get("website"),
-      }),
-    });
-    if (res.ok) {
-      setState("sent");
-      return;
+    /* EVERY exit from here must leave the button usable again. Without the
+       try/catch a dropped connection rejected the promise, the state stayed
+       "sending" forever, and the visitor watched a disabled "Sending…" that
+       would never resolve — told the opposite of the truth while the enquiry
+       was lost. The timeout matters for the same reason: a CRM that accepts
+       the connection and stalls would otherwise hang until the platform kills
+       the function. */
+    try {
+      const res = await fetch("/api/enquiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          name: form.get("name"),
+          email: form.get("email"),
+          phone: form.get("phone"),
+          message: form.get("message"),
+          property_reference: reference,
+          consent: form.get("consent") === "on",
+          website: form.get("website"),
+        }),
+      });
+      if (res.ok) {
+        setState("sent");
+        return;
+      }
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(body.error ?? "That did not send. Please call or WhatsApp us instead.");
+      setState("idle");
+    } catch {
+      setError("That did not send. Please call or WhatsApp us instead.");
+      setState("idle");
     }
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    setError(body.error ?? "That did not send. Please call or WhatsApp us instead.");
-    setState("idle");
   }
 
   if (state === "sent") {
     return (
-      <div className="border border-accent bg-accent-soft p-6">
+      <div
+        ref={sentRef}
+        role="status"
+        aria-live="polite"
+        tabIndex={-1}
+        className="border border-accent bg-accent-soft p-6"
+      >
         <p className="font-display text-xl text-ink">Thank you — that has reached us.</p>
         <p className="mt-2 text-sm text-ink-2">
           One of us will reply personally. If it is urgent, call{" "}
@@ -75,7 +104,19 @@ export function EnquiryForm({
     "h-11 w-full border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none";
 
   return (
-    <form onSubmit={onSubmit} className="border border-line bg-surface p-6">
+        /* action and method are the no-JavaScript path, and they are not
+       decoration: a form without them falls back to GET against the current
+       document, which would put the visitor's name, email, phone and message
+       into the URL, their browser history and the platform's request logs, and
+       lose the enquiry. The route accepts this encoding and answers with a
+       plain page. */
+    <form
+      action="/api/enquiry"
+      method="post"
+      onSubmit={onSubmit}
+      className="border border-line bg-surface p-6"
+    >
+      {reference ? <input type="hidden" name="property_reference" value={reference} /> : null}
       <h2 className="font-display text-xl text-ink">{heading}</h2>
       {intro ? <p className="mt-2 text-sm text-ink-2">{intro}</p> : null}
       {reference ? (
