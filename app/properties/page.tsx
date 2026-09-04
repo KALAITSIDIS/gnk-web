@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getListings } from "@/lib/crm";
+import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { PropertySearch } from "@/components/property-search";
 
@@ -59,9 +60,22 @@ export default async function PropertiesPage() {
               publicly at all. Tell us the brief and we will come back on what fits,
               including properties you will not find listed.
             </p>
+            {/* THIS SENTENCE MUST NOT OUTRUN /legal. It sits directly above a consent
+                checkbox whose label links to the privacy notice, so an absolute here is a
+                representation made at the point of collection. "Nobody else gets your
+                details" was one, and it was false: every enquiry is also emailed to the
+                desk through Resend, which app/legal/page.tsx's "Where your enquiry goes"
+                section discloses by name. What follows is the promise /legal actually
+                stands behind, in the same three terms — no sale, no developers or portals,
+                no mailing list. Change these two places together or not at all. */}
             <p className="mt-3 text-sm text-ink-3">
-              No automated alerts, and nobody else gets your details. One of us reads it and
-              replies.
+              We will not add you to a mailing list, sell your details, or pass them to
+              developers or portals. One of us reads your brief and replies. What we do with
+              it is set out in our{" "}
+              <Link href="/legal" className="text-accent underline">
+                privacy notice
+              </Link>
+              .
             </p>
           </div>
           <EnquiryForm
