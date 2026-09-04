@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { submitEnquiry } from "@/lib/crm";
 import { site } from "@/lib/site";
+import { describeProperty, SELLER_KEYS, type SellerFields } from "@/lib/enquiry-fields";
 
 /**
  * The site's own door, which forwards to the CRM's.
@@ -32,7 +33,23 @@ const schema = z.object({
   /** Consent is recorded because the CRM stores personal data (GDPR Art. 6). */
   consent: z.literal(true, { message: "Please confirm you are happy for us to reply." }),
   website: z.string().max(200).optional(),
+  /* An owner's answers about their own property. All optional on purpose: the
+     contact details are what make a lead, and a form that refuses to send until
+     someone remembers their plot size is a form that does not get sent. Kept as
+     strings rather than coerced to numbers — "about 180" is a real answer, and
+     rejecting it would lose an enquiry over a formatting opinion. */
+  district: z.string().trim().max(60).optional(),
+  area: z.string().trim().max(80).optional(),
+  property_type: z.string().trim().max(40).optional(),
+  bedrooms: z.string().trim().max(20).optional(),
+  covered_area_sqm: z.string().trim().max(20).optional(),
+  plot_area_sqm: z.string().trim().max(20).optional(),
+  year_built: z.string().trim().max(20).optional(),
+  title_deed_status: z.string().trim().max(40).optional(),
+  listed_elsewhere: z.string().trim().max(40).optional(),
+  timing: z.string().trim().max(40).optional(),
 });
+
 
 /** A tiny, self-contained page for the visitor whose JavaScript never arrived. */
 function htmlReply(title: string, body: string, status: number) {
@@ -80,6 +97,7 @@ export async function POST(request: Request) {
       // an unchecked box is absent from the payload entirely
       consent: form.get("consent") !== null,
       website: str("website"),
+      ...Object.fromEntries(SELLER_KEYS.map((k) => [k, str(k)])),
     };
   } else {
     try {
@@ -116,7 +134,16 @@ export async function POST(request: Request) {
       phone: d.phone || undefined,
       // The consent the visitor gave travels with the enquiry, so the desk can
       // see what was agreed to and when without asking them again.
-      message: [d.message, "— Consent given to be contacted about this enquiry."]
+      /* The seller's answers are flattened HERE, not in the browser, so the
+         JSON path and the no-JavaScript form path produce an identical lead —
+         one formatting implementation, in lib/enquiry-fields.ts. */
+      message: [
+        d.message,
+        describeProperty(
+          Object.fromEntries(SELLER_KEYS.map((k) => [k, d[k]])) as SellerFields,
+        ),
+        "— Consent given to be contacted about this enquiry.",
+      ]
         .filter(Boolean)
         .join("\n\n"),
       property_reference: d.property_reference || undefined,
