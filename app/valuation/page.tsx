@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
 
 export const metadata: Metadata = {
@@ -51,6 +52,13 @@ export default function ValuationPage() {
               The first conversation and an indicative view cost nothing and commit you to
               nothing. If you want the full written valuation with comparables, we will tell
               you the fee before we start.
+            </p>
+            <p className="mt-3 text-sm text-ink-2">
+              If you are past the number and weighing up who to instruct,{" "}
+              <Link href="/selling" className="text-accent underline">
+                what that involves is set out here
+              </Link>
+              .
             </p>
             {/* The offer to credit the valuation fee against commission was removed on
                 2026-09-04: it was live on the page while the TODO beside it recorded that

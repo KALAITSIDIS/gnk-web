@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { site } from "@/lib/site";
+import {
+  AREAS,
+  DEED_STATUSES,
+  LISTED_ELSEWHERE,
+  PROPERTY_TYPES,
+  SELLER_KEYS,
+  TIMINGS,
+} from "@/lib/enquiry-fields";
 
 /**
  * One form, used on the property page, the valuation page and contact.
@@ -16,11 +24,17 @@ export function EnquiryForm({
   heading = "Ask about this property",
   intro,
   cta = "Send enquiry",
+  /* An owner describing their own property. Everything else here is identical
+     on purpose: the seller path inherits the no-JavaScript fallback, the send
+     timeout, the focus handling and the email-or-phone guard rather than
+     growing a second copy of them that would drift out of step. */
+  seller = false,
 }: {
   reference?: string;
   heading?: string;
   intro?: string;
   cta?: string;
+  seller?: boolean;
 }) {
   /* Prefilled, because the point of the reference is that the buyer never has
      to describe which property they mean. */
@@ -75,6 +89,7 @@ export function EnquiryForm({
           property_reference: reference,
           consent: form.get("consent") === "on",
           website: form.get("website"),
+          ...Object.fromEntries(SELLER_KEYS.map((k) => [k, form.get(k) ?? ""])),
         }),
       });
       if (res.ok) {
@@ -163,6 +178,109 @@ export function EnquiryForm({
           />
         </label>
       </div>
+
+      {seller ? (
+        <fieldset className="mt-6 border-t border-line pt-5">
+          <legend className="sr-only">About the property</legend>
+          <p className="text-sm font-medium text-ink">About the property</p>
+          <p className="mt-1 text-xs text-ink-3">
+            Every one of these is optional. Tell us what you know and leave the rest — we
+            will ask about anything that matters.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">District</span>
+              <select name="district" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {Object.keys(AREAS).map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Area</span>
+              {/* Deliberately NOT filtered by the district above: filtering needs
+                  JavaScript, and this form has to work without it. Both answers
+                  reach the desk, which can read them together. */}
+              <select name="area" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {Object.entries(AREAS).map(([d, list]) => (
+                  <optgroup key={d} label={d}>
+                    {list.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Property type</span>
+              <select name="property_type" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {PROPERTY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Bedrooms</span>
+              <input name="bedrooms" maxLength={20} className={field} inputMode="numeric" />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Covered area (m²)</span>
+              <input name="covered_area_sqm" maxLength={20} className={field} inputMode="numeric" />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Plot (m²)</span>
+              <input name="plot_area_sqm" maxLength={20} className={field} inputMode="numeric" />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Year built</span>
+              <input name="year_built" maxLength={20} className={field} inputMode="numeric" />
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Title deed</span>
+              <select name="title_deed_status" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {DEED_STATUSES.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Currently listed anywhere?</span>
+              <select name="listed_elsewhere" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {LISTED_ELSEWHERE.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1 block text-sm text-ink-2">Timing</span>
+              <select name="timing" className={field} defaultValue="">
+                <option value="">Select…</option>
+                {TIMINGS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </fieldset>
+      ) : null}
 
       {/* Never shown, never focusable, never announced — a bot fills every
           input it finds, a person never sees this one. */}

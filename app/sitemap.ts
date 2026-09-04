@@ -34,11 +34,14 @@ export const revalidate = 60;
  * stale in March.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const pages = ["", "/properties", "/services", "/valuation", "/about", "/contact", "/legal"];
+  const pages = ["", "/properties", "/selling", "/services", "/valuation", "/about", "/contact", "/legal"];
   const staticEntries: MetadataRoute.Sitemap = pages.map((p) => ({
     url: SITE_URL + p,
     changeFrequency: p === "" || p === "/properties" ? "weekly" : "monthly",
-    priority: p === "" ? 1 : p === "/properties" ? 0.9 : 0.6,
+    // /selling and /valuation are where a mandate starts, so they outrank the
+    // brochure pages even though they change less often than the listings do.
+    priority:
+      p === "" ? 1 : p === "/properties" ? 0.9 : p === "/selling" || p === "/valuation" ? 0.8 : 0.6,
   }));
 
   const feed = await getListings();

@@ -145,6 +145,9 @@ export const site = {
 
 export const nav = [
   { href: "/properties", label: "Properties" },
+  // An owner deciding who to instruct had no route in: every other item here
+  // addresses a buyer. Mandates are the revenue.
+  { href: "/selling", label: "Selling" },
   { href: "/services", label: "Advisory" },
   { href: "/valuation", label: "Valuation" },
   { href: "/about", label: "About" },
