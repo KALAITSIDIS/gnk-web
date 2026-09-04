@@ -22,6 +22,12 @@ export function EnquiryForm({
   intro?: string;
   cta?: string;
 }) {
+  /* Prefilled, because the point of the reference is that the buyer never has
+     to describe which property they mean. */
+  const waHref = reference
+    ? `${site.contact.whatsappHref}?text=${encodeURIComponent(`Hello — I am interested in ${reference}.`)}`
+    : site.contact.whatsappHref;
+
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
   const sentRef = useRef<HTMLDivElement | null>(null);
@@ -38,8 +44,17 @@ export function EnquiryForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    setState("sending");
     const form = new FormData(e.currentTarget);
+    /* The route refuses this with a 400, which the visitor currently discovers
+       only after pressing Send and waiting. The server keeps its check — this
+       one is about not wasting their time. */
+    const hasEmail = String(form.get("email") ?? "").trim() !== "";
+    const hasPhone = String(form.get("phone") ?? "").trim() !== "";
+    if (!hasEmail && !hasPhone) {
+      setError("Please leave an email address or a phone number so we can reply.");
+      return;
+    }
+    setState("sending");
     /* EVERY exit from here must leave the button usable again. Without the
        try/catch a dropped connection rejected the promise, the state stayed
        "sending" forever, and the visitor watched a disabled "Sending…" that
@@ -101,7 +116,7 @@ export function EnquiryForm({
   }
 
   const field =
-    "h-11 w-full border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none";
+    "h-11 w-full border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
 
   return (
         /* action and method are the no-JavaScript path, and they are not
@@ -144,7 +159,7 @@ export function EnquiryForm({
             name="message"
             rows={4}
             maxLength={5000}
-            className="w-full border border-line bg-surface p-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+            className="w-full border border-line bg-surface p-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent"
           />
         </label>
       </div>
@@ -184,8 +199,23 @@ export function EnquiryForm({
         {state === "sending" ? "Sending…" : cta}
       </button>
 
+      {/* These were plain text. On the device most people read this on, an
+          un-linked phone number is a number nobody rings. */}
       <p className="mt-3 text-xs text-ink-3">
-        Or call {site.contact.phone} — you will speak to one of us, not a call centre.
+        Or call{" "}
+        <a href={site.contact.phoneHref} className="text-accent underline">
+          {site.contact.phone}
+        </a>{" "}
+        or message us on{" "}
+        <a
+          href={waHref}
+          className="text-accent underline"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          WhatsApp
+        </a>{" "}
+        — you will speak to one of us, not a call centre.
       </p>
     </form>
   );
