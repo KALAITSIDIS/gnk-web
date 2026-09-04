@@ -177,3 +177,39 @@ export function deliveryLabel(l: Listing): string | null {
 export function constructionLabel(l: Listing): string | null {
   return isUnderConstruction(l) ? label(l.construction_status) || null : null;
 }
+
+/**
+ * Property types that ARE a floor inside somebody else's building.
+ * Everything else owns its storeys rather than occupying one of them.
+ */
+const UNITS_IN_A_BUILDING = new Set(["apartment", "office", "shop"]);
+
+function isUnitInABuilding(l: Listing): boolean {
+  return l.kind === "unit" || UNITS_IN_A_BUILDING.has(l.property_type);
+}
+
+/**
+ * "2 of 2" is a POSITION, and only a unit has one.
+ *
+ * The site composed floor_number and total_floors into that string for every
+ * listing, so PAF0001 — a detached villa on a 1,200 m² plot — published "Floor
+ * 2 of 2" directly beneath an H1 reading "Two-storey villa" and body text
+ * saying "three bedrooms across two floors". A buyer reads that as a
+ * second-floor apartment. The CRM never composes these two fields; the
+ * relationship was the site's own invention, asserted on a live client mandate.
+ *
+ * For a whole dwelling the same number means something different and useful —
+ * how many storeys it has — so it is said separately rather than suppressed.
+ */
+export function floorLabel(l: Listing): string | null {
+  if (!isUnitInABuilding(l)) return null;
+  return l.floor_number !== null && l.total_floors
+    ? `${l.floor_number} of ${l.total_floors}`
+    : null;
+}
+
+/** How many storeys a whole dwelling has. Meaningless for land, and for a unit. */
+export function storeysLabel(l: Listing): string | null {
+  if (l.property_type === "land" || isUnitInABuilding(l)) return null;
+  return l.total_floors && l.total_floors > 1 ? String(l.total_floors) : null;
+}
