@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { submitEnquiry } from "@/lib/crm";
 import { site } from "@/lib/site";
-import { describeProperty, SELLER_KEYS, type SellerFields } from "@/lib/enquiry-fields";
+import { assembleMessage, SELLER_KEYS, type SellerFields } from "@/lib/enquiry-fields";
 
 /**
  * The site's own door, which forwards to the CRM's.
@@ -134,18 +134,16 @@ export async function POST(request: Request) {
       phone: d.phone || undefined,
       // The consent the visitor gave travels with the enquiry, so the desk can
       // see what was agreed to and when without asking them again.
-      /* The seller's answers are flattened HERE, not in the browser, so the
-         JSON path and the no-JavaScript form path produce an identical lead —
-         one formatting implementation, in lib/enquiry-fields.ts. */
-      message: [
+      /* Assembled by ONE function that guarantees the CRM's 5000-character cap,
+         because the visitor's message was validated against 5000 and THEN had
+         the property block and consent line appended — a real seller
+         submission could reach 5409 and be refused outright. See
+         lib/enquiry-fields.ts. Both submit paths land here, so the JSON and
+         no-JavaScript routes produce an identical lead. */
+      message: assembleMessage(
         d.message,
-        describeProperty(
-          Object.fromEntries(SELLER_KEYS.map((k) => [k, d[k]])) as SellerFields,
-        ),
-        "— Consent given to be contacted about this enquiry.",
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
+        Object.fromEntries(SELLER_KEYS.map((k) => [k, d[k]])) as SellerFields,
+      ),
       property_reference: d.property_reference || undefined,
       website: d.website || undefined,
     },
