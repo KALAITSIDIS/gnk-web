@@ -230,10 +230,16 @@ export default async function PropertyPage({
                   </div>
                 ))}
             </dl>
+            {/* Stamp duty was REMOVED from this sentence on 2026-09-04: the Stamp Duty
+                Laws 1963-2024 are repealed for documents signed on or after 1 January 2026
+                by Law 239(I)/2025 (gazette No. 5070, 31.12.2025). The site was naming a tax
+                that no longer exists, on live client mandates. The CRM holds that repeal
+                gazette-verified in cyprus_config.stamp_duty.abolished, dated 2026-08-29 —
+                if this ever needs restating, read it from there rather than from memory. */}
             <p className="mt-4 text-xs text-ink-3">
-              Transfer fees, stamp duty and VAT vary with the buyer&apos;s circumstances. We model
-              the full acquisition cost for you before you commit — ask and we will send it in
-              writing.
+              Transfer fees and VAT vary with the buyer&apos;s circumstances — and stamp duty no
+              longer applies to documents signed since 1 January 2026. We model the full
+              acquisition cost for you before you commit — ask and we will send it in writing.
             </p>
           </section>
         </div>
