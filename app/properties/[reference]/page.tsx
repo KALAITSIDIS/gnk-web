@@ -176,8 +176,13 @@ export default async function PropertyPage({
             </span>
           )}
         </div>
+        {/* 3 columns on a phone, not 2: three tiles in a 2-column grid leave an
+            empty half-cell, and with a further row drawn beneath it that hole
+            sits in the MIDDLE of the gallery, where it reads as a photograph
+            that failed to load. Above md these stack in the hero's narrow
+            column as before. */}
         {beside.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
+          <div className="grid grid-cols-3 gap-3 md:grid-cols-1">
             {beside.map((img, i) => (
               <div key={i} className="relative aspect-[4/3] overflow-hidden bg-surface-2">
                 {img.card ? (
@@ -195,8 +200,11 @@ export default async function PropertyPage({
         ) : null}
       </div>
 
+      {/* Same column count as the row above it at every width below lg, so the
+          trailing photographs are drawn at the same size as the ones beside the
+          cover and any empty cell falls at the ragged END of the gallery. */}
       {below.length > 0 ? (
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="mt-3 grid grid-cols-3 gap-3 lg:grid-cols-4">
           {below.map((img, i) => (
             <div key={i} className="relative aspect-[4/3] overflow-hidden bg-surface-2">
               {img.card ? (
@@ -204,7 +212,7 @@ export default async function PropertyPage({
                   src={img.card}
                   alt={text(img.alt) || `${titleOf(l)} — photograph ${i + 5}`}
                   fill
-                  sizes="(max-width: 640px) 50vw, 25vw"
+                  sizes="(max-width: 640px) 33vw, (max-width: 1024px) 33vw, 25vw"
                   className="object-cover"
                 />
               ) : null}

@@ -3,9 +3,16 @@
  * mandate. Keyed on the CRM reference.
  *
  * WHY THIS FILE EXISTS. The listing page used to head the feed's
- * `short_description` "Our view", and the home page promises "Every property on
- * this site carries a written view. If you cannot see the reasoning, do not act
- * on the number." Those two things were not the same thing. On PAF0003 the
+ * `short_description` "Our view" while the site promised, in more than one
+ * place, that every property carried the adviser's written view. Those two
+ * things were not the same thing.
+ *
+ * A NOTE FOR WHOEVER EDITS THIS NEXT: that promise existed in TWO copies — the
+ * home page and the /properties metadata — and the first fix changed only the
+ * one that was visible while editing. The metadata copy survived for an hour in
+ * search results and link previews, which is the copy that reaches people who
+ * never open the page. Grep the whole site for a claim before believing it is
+ * gone. On PAF0003 the
  * block headed "Our view" was the FIRST SENTENCE, verbatim, of the paragraph
  * printed directly beneath it — "Prime residential land in the prestigious Sea
  * Caves area... excellent development potential", which is the portal register
