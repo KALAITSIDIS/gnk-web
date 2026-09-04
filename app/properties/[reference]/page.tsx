@@ -1,0 +1,236 @@
+import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getListing, getListings } from "@/lib/crm";
+import {
+  area,
+  deedLabel,
+  label,
+  placeLine,
+  priceLabel,
+  pricePerSqm,
+  text,
+  titleOf,
+} from "@/lib/format";
+import { EnquiryForm } from "@/components/enquiry-form";
+import { site } from "@/lib/site";
+
+// A literal, not the imported constant: Next analyses segment config
+// statically and silently drops anything it cannot read at build time.
+// Keep this in step with FEED_REVALIDATE in lib/crm.ts.
+export const revalidate = 60;
+
+export async function generateStaticParams() {
+  const listings = await getListings();
+  return listings.map((l) => ({ reference: l.reference }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ reference: string }>;
+}): Promise<Metadata> {
+  const { reference } = await params;
+  const l = await getListing(reference);
+  if (!l) return { title: "Property not found" };
+  const description = text(l.short_description) || text(l.public_description).slice(0, 200) || placeLine(l);
+  const cover = (l.images ?? []).find((i) => i.is_cover) ?? (l.images ?? [])[0];
+  return {
+    title: titleOf(l),
+    description,
+    openGraph: {
+      title: titleOf(l),
+      description,
+      images: cover?.card ? [cover.card] : undefined,
+    },
+  };
+}
+
+export default async function PropertyPage({
+  params,
+}: {
+  params: Promise<{ reference: string }>;
+}) {
+  const { reference } = await params;
+  const l = await getListing(reference);
+  if (!l) notFound();
+
+  const images = l.images ?? [];
+  const cover = images.find((i) => i.is_cover) ?? images[0];
+  const rest = images.filter((i) => i !== cover).slice(0, 6);
+  const judgement = text(l.short_description);
+  const body = text(l.public_description);
+
+  /* The measurements a buyer compares on, and the ones a Cyprus buyer asks
+     about specifically — deed status, VAT treatment, €/m². Only rows with a
+     real value are rendered; an empty table row is worse than a shorter table. */
+  const facts: [string, string | null][] = [
+    ["Price", priceLabel(l)],
+    ["Per m²", pricePerSqm(l)],
+    ["Covered area", area(l.covered_area_sqm)],
+    ["Plot", area(l.plot_area_sqm)],
+    ["Veranda", area(l.veranda_sqm)],
+    ["Bedrooms", l.bedrooms ? String(l.bedrooms) : null],
+    ["Bathrooms", l.bathrooms ? String(l.bathrooms) : null],
+    ["Parking", l.parking_spaces ? String(l.parking_spaces) : null],
+    ["Floor", l.floor_number !== null && l.total_floors ? `${l.floor_number} of ${l.total_floors}` : null],
+    ["Year built", l.year_built ? String(l.year_built) : null],
+    ["Energy class", l.energy_class],
+    ["Title deed", deedLabel(l.title_deed_status)],
+    ["Construction", l.construction_status ? label(l.construction_status) : null],
+    ["Delivery", l.delivery_date],
+    ["VAT", l.vat_status ? label(l.vat_status) : null],
+    ["Distance to sea", l.sea_distance_m ? `${l.sea_distance_m} m` : null],
+    ["Reference", l.reference],
+  ];
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "RealEstateListing",
+    name: titleOf(l),
+    description: judgement || body.slice(0, 300) || placeLine(l),
+    url: `/properties/${l.reference}`,
+    image: images.map((i) => i.card).filter(Boolean),
+    ...(l.asking_price
+      ? {
+          offers: {
+            "@type": "Offer",
+            price: l.asking_price,
+            priceCurrency: l.currency ?? "EUR",
+            availability: "https://schema.org/InStock",
+          },
+        }
+      : {}),
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: text(l.area) || text(l.district),
+      addressRegion: text(l.district),
+      addressCountry: "CY",
+    },
+    ...(l.covered_area_sqm
+      ? { floorSize: { "@type": "QuantitativeValue", value: l.covered_area_sqm, unitCode: "MTK" } }
+      : {}),
+    ...(l.bedrooms ? { numberOfBedrooms: l.bedrooms } : {}),
+  };
+
+  return (
+    <article className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
+      <Link href="/properties" className="text-sm text-ink-2 hover:text-accent">
+        ← All properties
+      </Link>
+
+      <header className="mt-4">
+        <p className="eyebrow">{placeLine(l)}</p>
+        <h1 className="mt-2 text-4xl">{titleOf(l)}</h1>
+        <p className="mt-3 font-display text-3xl text-accent tabular-nums">{priceLabel(l)}</p>
+      </header>
+
+      <div className="mt-8 grid gap-3 md:grid-cols-[2fr_1fr]">
+        <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
+          {cover?.card ? (
+            <Image
+              src={cover.card}
+              alt={text(cover.alt) || titleOf(l)}
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 66vw"
+              className="object-cover"
+            />
+          ) : (
+            <span className="placeholder absolute inset-0 flex items-center justify-center text-sm">
+              Photography to follow
+            </span>
+          )}
+        </div>
+        {rest.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-1">
+            {rest.slice(0, 3).map((img, i) => (
+              <div key={i} className="relative aspect-[4/3] overflow-hidden bg-surface-2">
+                {img.card ? (
+                  <Image
+                    src={img.card}
+                    alt={text(img.alt) || `${titleOf(l)} — photograph ${i + 2}`}
+                    fill
+                    sizes="33vw"
+                    className="object-cover"
+                  />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-12 grid gap-12 lg:grid-cols-[1.4fr_1fr] lg:items-start">
+        <div>
+          {judgement ? (
+            <section className="border-l-2 border-accent pl-5">
+              <p className="eyebrow">Our view</p>
+              <p className="mt-2 font-display text-xl text-ink">{judgement}</p>
+              {/* TODO: byline of the principal who holds the mandate, once the
+                  CRM's assigned agent is exposed on the public feed. */}
+            </section>
+          ) : null}
+
+          {body ? (
+            <section className="mt-8">
+              <h2 className="text-2xl">About this property</h2>
+              {body.split(/\n{2,}/).map((para, i) => (
+                <p key={i} className="mt-3 text-ink-2">
+                  {para}
+                </p>
+              ))}
+            </section>
+          ) : null}
+
+          {(l.features ?? []).length > 0 ? (
+            <section className="mt-8">
+              <h2 className="text-2xl">Features</h2>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {(l.features ?? []).map((f) => (
+                  <li key={f} className="border border-line bg-surface px-3 py-1 text-sm text-ink-2">
+                    {label(f)}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section className="mt-8">
+            <h2 className="text-2xl">The numbers</h2>
+            <dl className="mt-3 grid grid-cols-1 border-t border-line sm:grid-cols-2">
+              {facts
+                .filter(([, v]) => Boolean(v))
+                .map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-4 border-b border-line py-2.5 sm:pr-6">
+                    <dt className="text-sm text-ink-3">{k}</dt>
+                    <dd className="text-sm text-ink tabular-nums">{v}</dd>
+                  </div>
+                ))}
+            </dl>
+            <p className="mt-4 text-xs text-ink-3">
+              Transfer fees, stamp duty and VAT vary with the buyer&apos;s circumstances. We model
+              the full acquisition cost for you before you commit — ask and we will send it in
+              writing.
+            </p>
+          </section>
+        </div>
+
+        <div className="lg:sticky lg:top-8">
+          <EnquiryForm
+            reference={l.reference}
+            heading="Ask about this property"
+            intro={`Arrange a viewing, ask for the full cost model, or get our written view on the price. You will hear back from one of us at ${site.shortName}.`}
+            cta="Send enquiry"
+          />
+        </div>
+      </div>
+    </article>
+  );
+}

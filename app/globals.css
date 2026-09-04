@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/*
+ * The palette is deliberately quiet. On a property site the photographs carry
+ * the colour — JamesEdition is essentially ink on paper and lets the villas do
+ * the work — and a restrained ground is also the safest possible host for a
+ * brand identity that does not exist yet. One accent, used only where the
+ * visitor can act.
+ */
+@theme {
+  --color-ink: #16181a;
+  --color-ink-2: #4a5157;
+  --color-ink-3: #767f86;
+  --color-paper: #f7f7f5;
+  --color-surface: #ffffff;
+  --color-surface-2: #eeefeb;
+  --color-line: #dfe1dc;
+  --color-line-2: #c6c9c2;
+
+  /* deep sea-pine: Mediterranean without being a postcard */
+  --color-accent: #14524c;
+  --color-accent-hover: #0d3b36;
+  --color-accent-soft: #e2edea;
+
+  --font-display: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    line-height: 1.15;
+  }
+  /* Keyboard focus must always be visible — a site people fill forms on. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* An uppercase label needs air or it reads as shouting. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+  .placeholder {
+    border: 1px dashed var(--color-line-2);
+    background: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 8px,
+      var(--color-surface-2) 8px,
+      var(--color-surface-2) 16px
+    );
+    color: var(--color-ink-3);
+  }
+}
