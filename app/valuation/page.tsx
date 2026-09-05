@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site-url";
 import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
 
 export const metadata: Metadata = {
+  ...pageMeta("/valuation"),
   title: "What is your property worth",
   description:
     "A written pricing view on your Cyprus property, with real comparables and a defensible range — from a named adviser, not an automated estimate.",

@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getListings } from "@/lib/crm";
 import { OrganizationJsonLd } from "@/components/org-json-ld";
+import { pageMeta } from "@/lib/site-url";
 import { site } from "@/lib/site";
 import { PropertySearch } from "@/components/property-search";
 
@@ -8,6 +10,13 @@ import { PropertySearch } from "@/components/property-search";
 // statically and silently drops anything it cannot read at build time.
 // Keep this in step with FEED_REVALIDATE in lib/crm.ts.
 export const revalidate = 60;
+
+/* The home page inherits its title and description from the root layout, but
+   still has to name itself: without this it had no canonical, and its og:url
+   came from the layout value that every other page was wrongly inheriting. */
+export const metadata: Metadata = {
+  ...pageMeta("/"),
+};
 
 /**
  * Search-led, as the firm chose: the search and the mandates come first.

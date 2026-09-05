@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site-url";
 import Link from "next/link";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
+  ...pageMeta("/about"),
   title: "About",
   description:
     "An independent real estate advisory practice in Paphos. Two principals, named, on every mandate.",

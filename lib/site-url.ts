@@ -18,3 +18,26 @@ export const SITE_URL = (process.env.SITE_URL ?? "https://gnk-web.vercel.app").r
 export function absolute(path: string): string {
   return path.startsWith("http") ? path : SITE_URL + (path.startsWith("/") ? path : "/" + path);
 }
+
+/**
+ * The two URL facts every page has to state about itself.
+ *
+ * WHY A HELPER RATHER THAN EIGHT HAND-WRITTEN PAIRS. `og:url` is not
+ * decoration: Facebook and LinkedIn treat it as the IDENTITY of the shared
+ * object, so a wrong one attributes a shared /selling link to the home page and
+ * consolidates its engagement there. The root layout used to set it once, which
+ * meant every page on the site claimed to be the home page. A canonical is the
+ * same fact told to search engines, and there was none at all — with
+ * case-variant listing URLs answering 200, that is a live duplicate-content
+ * exposure.
+ *
+ * Both are relative on purpose: Next resolves them against metadataBase, which
+ * reads SITE_URL above, so the domain cutover changes one line and every
+ * canonical and og:url on the site follows.
+ */
+export function pageMeta(path: string) {
+  return {
+    alternates: { canonical: path },
+    openGraph: { url: path },
+  };
+}

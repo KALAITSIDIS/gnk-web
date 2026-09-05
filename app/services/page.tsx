@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site-url";
 import Link from "next/link";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
+  ...pageMeta("/services"),
   title: "Advisory",
   description:
     "Buyer and seller advisory, investment advisory, pricing analytics, development support, deal structuring and due diligence — in Paphos, Cyprus.",
