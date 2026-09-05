@@ -21,7 +21,8 @@ import {
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { ListingContactBar } from "@/components/listing-contact-bar";
-import { absolute, OG_BASE } from "@/lib/site-url";
+import { listingBreadcrumbs, listingJsonLd } from "@/lib/jsonld";
+import { OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -47,9 +48,10 @@ export async function generateMetadata({
   const cover = (l.images ?? []).find((i) => i.is_cover) ?? (l.images ?? [])[0];
   /* A listing is the most-shared page on the site, and it had neither a
      canonical nor an og:url — so a shared link carried the layout's root value
-     and a share dialog treated a EUR 450,000 villa as the home page. It also
-     makes the case-variant URL (/properties/paf0001, which answers 200) point
-     at the canonical spelling. */
+     and a share dialog treated a EUR 450,000 villa as the home page. The
+     case-variant URL /properties/paf0001 now 308s to the canonical spelling
+     (see the redirect below), so this is belt and braces for anything that
+     reached the lower-case spelling before that shipped. */
   const path = `/properties/${l.reference}`;
   return {
     title: titleOf(l),
@@ -148,53 +150,14 @@ export default async function PropertyPage({
     ["Reference", l.reference],
   ];
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "RealEstateListing",
-    name: titleOf(l),
-    description: summary || body.slice(0, 300) || placeLine(l),
-    // Absolute: a relative url in structured data is undefined behaviour for
-    // every consumer that reads it away from this page.
-    url: absolute(`/properties/${l.reference}`),
-    image: images.map((i) => i.card).filter(Boolean),
-    ...(l.asking_price
-      ? {
-          offers: {
-            "@type": "Offer",
-            price: l.asking_price,
-            priceCurrency: l.currency ?? "EUR",
-            availability: "https://schema.org/InStock",
-          },
-        }
-      : {}),
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: text(l.area) || text(l.district),
-      addressRegion: text(l.district),
-      addressCountry: "CY",
-    },
-    ...(l.covered_area_sqm
-      ? { floorSize: { "@type": "QuantitativeValue", value: l.covered_area_sqm, unitCode: "MTK" } }
-      : {}),
-    ...(l.bedrooms ? { numberOfBedrooms: l.bedrooms } : {}),
-  };
-
-  /* Where this page sits, so a search result can show the path rather than a
-     bare URL. Absolute throughout for the same reason the listing url is. */
-  const breadcrumbs = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Home", item: absolute("/") },
-      { "@type": "ListItem", position: 2, name: "Properties", item: absolute("/properties") },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: titleOf(l),
-        item: absolute(`/properties/${l.reference}`),
-      },
-    ],
-  };
+  /* Both blocks moved to lib/jsonld.ts, where they are tested.
+     They were written here, inline, immediately below the facts table — and
+     still published the container figures the table three lines above
+     withholds, because a second copy of a rule is a second chance to forget
+     it. Withholding a fact from a buyer and publishing it to a machine on the
+     same page is worse than not withholding it at all. */
+  const jsonLd = listingJsonLd(l);
+  const breadcrumbs = listingBreadcrumbs(l);
 
   return (
     // pb-24 on mobile keeps the fixed bar from covering the end of the page
@@ -216,6 +179,18 @@ export default async function PropertyPage({
         <p className="eyebrow">{placeLine(l)}</p>
         <h1 className="mt-2 text-4xl">{titleOf(l)}</h1>
         <p className="mt-3 font-display text-3xl text-accent tabular-nums">{priceLabel(l)}</p>
+        {/* The card says "Development" on a badge over its photograph. This page
+            is where a search result and a shared link land, and it said nothing
+            — so a buyer read an unexplained "from" and a facts table with no
+            bedrooms as one villa with missing data. Says what it is, and why
+            the two things it is missing are missing. */}
+        {isContainer(l) ? (
+          <p className="mt-2 max-w-prose text-sm text-ink-2">
+            A development: the price is the lowest of its units, and bedrooms,
+            bathrooms and areas belong to those units rather than to the
+            development as a whole.
+          </p>
+        ) : null}
       </header>
 
       <div className="mt-8 grid gap-3 md:grid-cols-[2fr_1fr]">

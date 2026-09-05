@@ -5,6 +5,7 @@ import {
   deliveryLabel,
   floorLabel,
   isContainer,
+  placeLine,
   priceLabel,
   pricePerSqm,
   storeysLabel,
@@ -86,6 +87,34 @@ describe("a development is not a dwelling", () => {
     expect(isContainer(development)).toBe(true);
     expect(constructionLabel(development)).toBe("Finishing");
     expect(deliveryLabel(development)).toBe("1 October 2099");
+  });
+});
+
+describe("the line a buyer scans says which of the two it is", () => {
+  const where = { area: { en: "Peyia" }, district: { en: "Paphos" } };
+
+  it("calls a development a development", () => {
+    // Withholding the beds and the areas, and pricing "from", left the detail
+    // page reading "Villa in Peyia, Paphos" over a table with no bedrooms —
+    // one villa with missing data. The card had a badge; the page, which is
+    // where a shared link and a search result land, had nothing.
+    const l = { ...development, ...where } as unknown as Listing;
+    expect(placeLine(l)).toBe("Villa development in Peyia, Paphos");
+  });
+
+  it("leaves a dwelling alone", () => {
+    const l = { ...villa, ...where } as unknown as Listing;
+    expect(placeLine(l)).toBe("Villa in Peyia, Paphos");
+  });
+
+  it("says it of a phase too, which is a container by the same rule", () => {
+    const l = { ...development, ...where, kind: "phase" } as unknown as Listing;
+    expect(placeLine(l)).toBe("Villa development in Peyia, Paphos");
+  });
+
+  it("does not pluralise, so land and plots still read as English", () => {
+    const l = { ...development, ...where, property_type: "land" } as unknown as Listing;
+    expect(placeLine(l)).toBe("Land development in Peyia, Paphos");
   });
 });
 

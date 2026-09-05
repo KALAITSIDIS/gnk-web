@@ -1,7 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Listing } from "@/lib/crm";
-import { area, coverImage, deedLabel, label, placeLine, priceLabel, text, titleOf } from "@/lib/format";
+import {
+  area,
+  coverImage,
+  deedLabel,
+  isContainer,
+  label,
+  placeLine,
+  priceLabel,
+  text,
+  titleOf,
+} from "@/lib/format";
 
 /**
  * The card, in the anatomy this market has converged on: photograph, price
@@ -27,7 +37,11 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
   const view = text(listing.adviser_view);
   const summary = text(listing.short_description);
   const deed = deedLabel(listing.title_deed_status);
-  const isProject = listing.kind === "project" || listing.kind === "phase";
+  /* Imported, not re-typed. This predicate decides what the whole site
+     withholds; a second copy of it here is a second thing to remember to
+     change, and the one class of bug this project keeps producing is one fact
+     living in two places. */
+  const isProject = isContainer(listing);
 
   /* A development's own beds/baths/area describe no dwelling for sale — the
      units carry those. Showing them puts one villa's shape on a project that

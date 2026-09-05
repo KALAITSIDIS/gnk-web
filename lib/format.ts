@@ -100,11 +100,29 @@ export function label(token: string | null | undefined): string {
   return WORDS[token] ?? token.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }
 
-/** "Villa in Peyia, Paphos" — the line every competitor card uses, and the one buyers scan for. */
+/**
+ * "Villa in Peyia, Paphos" — the line every competitor card uses, and the one
+ * buyers scan for. "Villa development in Peyia, Paphos" when it is one.
+ *
+ * The container clause is not a flourish. isContainer above promises that what
+ * is genuinely true of a development — THAT IT IS ONE, its build stage and its
+ * delivery date — still renders, and the only thing on the site saying so was a
+ * badge on the card. A search result and a shared link both land on the detail
+ * page, which does not pass through a card: it showed "Villa in Peyia, Paphos"
+ * over a facts table with no bedrooms and a price reading "from", which reads
+ * as one villa with missing data.
+ *
+ * This line is also the meta description fallback, the structured-data name
+ * fallback and part of the search haystack, so saying it here says it in all
+ * four places at once.
+ */
 export function placeLine(l: Listing): string {
   const type = label(l.property_type);
+  // No pluralisation: "Villa development" is right for every property_type the
+  // CRM allows, where "Villas" would not be for land or plot.
+  const what = isContainer(l) ? (type ? `${type} development` : "Development") : type;
   const where = [text(l.area), text(l.district)].filter(Boolean).join(", ");
-  return where ? `${type} in ${where}` : type;
+  return where ? `${what} in ${where}` : what;
 }
 
 /** The cover photograph, or the first one, or nothing. */
