@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Listing } from "@/lib/crm";
 import { label, placeLine, text, titleOf } from "@/lib/format";
-import { priceStepsFor } from "@/lib/search";
+import { bedroomOptionsFor, matchesBedrooms, priceStepsFor } from "@/lib/search";
 import { PropertyCard } from "@/components/property-card";
 
 /**
@@ -39,13 +39,9 @@ export function PropertySearch({
     () => [...new Set(listings.map((l) => l.property_type).filter(Boolean))].sort(),
     [listings],
   );
-  const bedOptions = useMemo(
-    () =>
-      [...new Set(listings.map((l) => l.bedrooms).filter((b): b is number => !!b))].sort(
-        (a, b) => a - b,
-      ),
-    [listings],
-  );
+  // lib/search.ts — a development contributes no bedroom count: its own is
+  // the one figure every other surface withholds.
+  const bedOptions = useMemo(() => bedroomOptionsFor(listings), [listings]);
   const prices = useMemo(
     () =>
       listings
@@ -61,7 +57,7 @@ export function PropertySearch({
     const needle = q.trim().toLowerCase();
     return listings.filter((l) => {
       if (type && l.property_type !== type) return false;
-      if (beds && (l.bedrooms ?? 0) < Number(beds)) return false;
+      if (!matchesBedrooms(l, beds)) return false;
       if (maxPrice) {
         const p = l.transaction_type === "rent" ? l.rent_price_month : l.asking_price;
         if (p && p > Number(maxPrice)) return false;

@@ -8,12 +8,14 @@ import { absolute } from "@/lib/site-url";
  * It lives in its own file, and is tested, because of what it did wrong: the
  * visible table on a development withholds the container's beds, baths and
  * areas — those describe no dwelling anyone can buy — and prices it "from".
- * The structured data twelve lines below it did none of that. It published
- * floorSize 300 m², numberOfBedrooms 5 and a firm Offer of 800,000 InStock to
- * Google and every other consumer, where nobody reading the page could see it.
+ * The structured data built directly beneath it, in the same function, did none
+ * of that. It published floorSize 300 m², numberOfBedrooms 5 and a firm Offer
+ * of 800,000 InStock to Google and every other consumer, where nobody reading
+ * the page could see it.
  *
- * That is this project's recurring failure verbatim, and the second time in
- * this exact file: a claim removed from the page and left in the metadata. The
+ * That is this project's recurring failure verbatim, and the second time on
+ * this page (54d9490 was the first): a claim removed from the page and left in
+ * the metadata. The
  * rule now has one home. If a fact is withheld from the table because a
  * container does not own it, it is withheld here too — see isContainer in
  * lib/format.ts, which is the one definition of what a container is.

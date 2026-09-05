@@ -175,11 +175,6 @@ export function assembleMessage(visitorMessage: string | undefined, block: strin
 }
 
 /**
- * What the textarea may honestly advertise, given what gets appended to it.
- * The server guarantees the cap either way; this stops the form promising a
- * budget the route cannot honour.
- */
-/**
  * The maximum length the route accepts for each answer.
  *
  * ONE DECLARATION, used by BOTH the route's schema and the worst-case below.

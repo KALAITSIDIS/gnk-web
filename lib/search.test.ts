@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { priceStepsFor } from "./search";
+import type { Listing } from "@/lib/crm";
+import { bedroomOptionsFor, matchesBedrooms, priceStepsFor } from "./search";
 
 /** The three properties actually published on 2026-09-05. */
 const LIVE = [285_000, 450_000, 780_000];
@@ -38,5 +39,41 @@ describe("a price step has to be able to return something", () => {
         expect(prices.some((p) => p > step), `${step} excludes nothing`).toBe(true);
       }
     }
+  });
+});
+
+/** PAF0002 as it is: a project whose own 5 describes none of its six 4-bed villas. */
+const development = { reference: "PAF0002", kind: "project", bedrooms: 5 } as unknown as Listing;
+const villa = { reference: "PAF0001", kind: "standalone", bedrooms: 3 } as unknown as Listing;
+const flat = { reference: "PAF0004", kind: "standalone", bedrooms: 2 } as unknown as Listing;
+
+describe("the bedroom control never reads a development's own count", () => {
+  it("offers no option built from a container", () => {
+    // The live bar was offering "5+" on the strength of PAF0002's container
+    // row — a step that could only match the development itself, whose page
+    // prints no bedroom count at all. Every other surface was gated that day;
+    // this one was still reading the raw field.
+    expect(bedroomOptionsFor([development, villa, flat])).toEqual([2, 3]);
+  });
+
+  it("never lets a container satisfy a bedroom filter, however low", () => {
+    expect(matchesBedrooms(development, "4")).toBe(false);
+    expect(matchesBedrooms(development, "1")).toBe(false);
+  });
+
+  it("leaves a container in the results when no bedroom filter is set", () => {
+    // It is still found by type, price and text; only this control ignores it.
+    expect(matchesBedrooms(development, "")).toBe(true);
+  });
+
+  it("keeps ordinary minimum-bedroom semantics for a dwelling", () => {
+    expect(matchesBedrooms(villa, "3")).toBe(true);
+    expect(matchesBedrooms(villa, "4")).toBe(false);
+    expect(matchesBedrooms(flat, "")).toBe(true);
+  });
+
+  it("dedupes and sorts what it does offer", () => {
+    const twin = { ...villa, reference: "PAF0009" } as unknown as Listing;
+    expect(bedroomOptionsFor([villa, flat, twin])).toEqual([2, 3]);
   });
 });
