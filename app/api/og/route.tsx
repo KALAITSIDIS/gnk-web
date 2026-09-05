@@ -19,7 +19,36 @@ import { site } from "@/lib/site";
  */
 export const runtime = "nodejs";
 
-export function GET() {
+/**
+ * The site's display face, fetched so the card is set in the same type as the
+ * pages it represents.
+ *
+ * GUARDED, because a share card that fails to render is worse than one in the
+ * wrong face: crawlers would get a 500 and show nothing at all. If the fetch
+ * fails the card still renders in the runtime's default, which is exactly what
+ * shipped before this — legible, just not ours.
+ *
+ * The previous version declared fontFamily: "Georgia, serif" and got neither.
+ * Georgia is not present in this runtime, so it fell back silently to a sans
+ * face while the code claimed otherwise.
+ */
+async function displayFont(): Promise<ArrayBuffer | null> {
+  try {
+    const css = await fetch(
+      "https://fonts.googleapis.com/css2?family=Newsreader:wght@500&display=swap",
+      { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 86400 } },
+    ).then((r) => (r.ok ? r.text() : ""));
+    const url = css.match(/src:\s*url\((https:[^)]+)\)/)?.[1];
+    if (!url) return null;
+    const res = await fetch(url, { next: { revalidate: 86400 } });
+    return res.ok ? await res.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function GET() {
+  const font = await displayFont();
   return new ImageResponse(
     (
       <div
@@ -31,7 +60,7 @@ export function GET() {
           justifyContent: "space-between",
           background: "#14524c",
           padding: "72px 80px",
-          fontFamily: "Georgia, serif",
+          fontFamily: font ? "Newsreader" : "serif",
        }}
       >
         <div style={{ display: "flex", flexDirection: "column" }}>
@@ -52,6 +81,12 @@ export function GET() {
         </div>
       </div>
     ),
-    { width: 1200, height: 630 },
+    {
+      width: 1200,
+      height: 630,
+      ...(font
+        ? { fonts: [{ name: "Newsreader", data: font, weight: 500 as const, style: "normal" as const }] }
+        : {}),
+    },
   );
 }
