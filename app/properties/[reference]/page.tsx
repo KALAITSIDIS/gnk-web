@@ -20,7 +20,7 @@ import {
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { adviserView } from "@/lib/views";
-import { absolute } from "@/lib/site-url";
+import { absolute, OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -55,10 +55,15 @@ export async function generateMetadata({
     description,
     alternates: { canonical: path },
     openGraph: {
+      // Spread first for the same reason pageMeta does it: this object REPLACES
+      // the layout's, so anything omitted here is simply not emitted.
+      ...OG_BASE,
       title: titleOf(l),
       description,
       url: path,
-      images: cover?.card ? [cover.card] : undefined,
+      // The photograph beats the generated card — on a listing the image IS the
+      // point. Falls back to the card when a listing has no photograph yet.
+      images: cover?.card ? [cover.card] : OG_BASE.images,
     },
   };
 }
