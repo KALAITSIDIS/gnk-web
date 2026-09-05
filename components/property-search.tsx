@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Listing } from "@/lib/crm";
 import { label, placeLine, text, titleOf } from "@/lib/format";
+import { priceStepsFor } from "@/lib/search";
 import { PropertyCard } from "@/components/property-card";
 
 /**
@@ -52,12 +53,9 @@ export function PropertySearch({
         .filter((p): p is number => !!p),
     [listings],
   );
-  const priceSteps = useMemo(() => {
-    if (prices.length < 2) return [];
-    const max = Math.max(...prices);
-    const steps = [250_000, 500_000, 750_000, 1_000_000, 2_000_000, 5_000_000];
-    return steps.filter((s) => s < max);
-  }, [prices]);
+  // lib/search.ts — a step must be able to include something and exclude
+  // something, or it is a filter that can only return an empty page.
+  const priceSteps = useMemo(() => priceStepsFor(prices), [prices]);
 
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
