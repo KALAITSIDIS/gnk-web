@@ -29,11 +29,16 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
   const deed = deedLabel(listing.title_deed_status);
   const isProject = listing.kind === "project" || listing.kind === "phase";
 
-  const specs = [
-    listing.bedrooms ? `${listing.bedrooms} bed` : null,
-    listing.bathrooms ? `${listing.bathrooms} bath` : null,
-    area(listing.covered_area_sqm),
-  ].filter(Boolean);
+  /* A development's own beds/baths/area describe no dwelling for sale — the
+     units carry those. Showing them puts one villa's shape on a project that
+     contains six of a different shape. */
+  const specs = isProject
+    ? []
+    : [
+        listing.bedrooms ? `${listing.bedrooms} bed` : null,
+        listing.bathrooms ? `${listing.bathrooms} bath` : null,
+        area(listing.covered_area_sqm),
+      ].filter(Boolean);
 
   return (
     <article className="group flex flex-col overflow-hidden border border-line bg-surface transition-colors hover:border-line-2">

@@ -8,6 +8,7 @@ import {
   constructionLabel,
   deedLabel,
   deliveryLabel,
+  isContainer,
   floorLabel,
   label,
   placeLine,
@@ -106,6 +107,8 @@ export default async function PropertyPage({
      one-line description — useful, but written to describe, not to judge. The
      adviser's view is a judgement, and only exists where a principal has
      written one. */
+  /* False for a development: its unit-shaped fields belong to no dwelling. */
+  const unitFacts = !isContainer(l);
   const summary = text(l.short_description);
   const view = adviserView(l.reference);
   const body = text(l.public_description);
@@ -116,12 +119,15 @@ export default async function PropertyPage({
   const facts: [string, string | null][] = [
     ["Price", priceLabel(l)],
     ["Per m²", pricePerSqm(l)],
-    ["Covered area", area(l.covered_area_sqm)],
-    ["Plot", area(l.plot_area_sqm)],
-    ["Veranda", area(l.veranda_sqm)],
-    ["Bedrooms", l.bedrooms ? String(l.bedrooms) : null],
-    ["Bathrooms", l.bathrooms ? String(l.bathrooms) : null],
-    ["Parking", l.parking_spaces ? String(l.parking_spaces) : null],
+    // A development's own beds, baths and areas describe no dwelling anyone can
+    // buy — its units carry those, and on PAF0002 the container said 5/5/300 m²
+    // while its villas are 4/4/250. Withheld rather than published as fact.
+    ["Covered area", unitFacts ? area(l.covered_area_sqm) : null],
+    ["Plot", unitFacts ? area(l.plot_area_sqm) : null],
+    ["Veranda", unitFacts ? area(l.veranda_sqm) : null],
+    ["Bedrooms", unitFacts && l.bedrooms ? String(l.bedrooms) : null],
+    ["Bathrooms", unitFacts && l.bathrooms ? String(l.bathrooms) : null],
+    ["Parking", unitFacts && l.parking_spaces ? String(l.parking_spaces) : null],
     // "N of M" is a position inside a building; a villa has storeys instead.
     ["Floor", floorLabel(l)],
     ["Storeys", storeysLabel(l)],
