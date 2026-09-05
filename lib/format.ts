@@ -18,10 +18,6 @@ export function money(n: number | null | undefined): string | null {
 }
 
 /**
- * What a listing costs, said the way its transaction works. A rental priced
- * per month and a sale priced outright must never render identically.
- */
-/**
  * A development is not a dwelling, and almost nothing on a container describes
  * something a buyer can buy.
  *
@@ -46,6 +42,10 @@ export function isContainer(l: Listing): boolean {
   return l.kind === "project" || l.kind === "phase";
 }
 
+/**
+ * What a listing costs, said the way its transaction works. A rental priced
+ * per month and a sale priced outright must never render identically.
+ */
 export function priceLabel(l: Listing): string {
   if (l.transaction_type === "rent") {
     const rent = money(l.rent_price_month);

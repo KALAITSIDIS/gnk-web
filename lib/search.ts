@@ -1,8 +1,11 @@
+import type { Listing } from "@/lib/crm";
+import { isContainer } from "@/lib/format";
+
 /**
  * The price ladder offered in the search bar.
  *
  * Every OTHER control on this bar is built from what actually exists — the type
- * list and the bedroom list are the distinct values found in the listings — so
+ * list and the bedroom list are distinct values found in the listings — so
  * every option they offer can return something. The price steps were the one
  * exception: a fixed ladder filtered only against the highest price, which took
  * no account of the lowest.
@@ -25,4 +28,37 @@ export function priceStepsFor(prices: readonly number[]): number[] {
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   return PRICE_LADDER.filter((s) => s >= min && s < max);
+}
+
+/**
+ * The bedroom counts the bar may offer, and the test a listing has to pass
+ * when one is chosen.
+ *
+ * Both sat inline in the search component and read every listing's raw
+ * `bedrooms` — a development's included, which is the one number every other
+ * surface withholds (isContainer in lib/format.ts: PAF0002 carries 5 while its
+ * villas carry 4). Offered as an option, that 5 was a step that could only
+ * ever match the development itself, whose page then prints no bedroom count
+ * at all; as a predicate it would have let a "4+" search return a project on
+ * the strength of a figure the page refuses to show. Every other consumer was
+ * gated the day the rule was written; this was the one still reading the raw
+ * field, and the comment above even described it as correct.
+ *
+ * So a container contributes no option and matches no bedroom filter. It is
+ * still found by type, price and text — placeLine says "development".
+ */
+export function bedroomOptionsFor(listings: readonly Listing[]): number[] {
+  const seen = new Set<number>();
+  for (const l of listings) {
+    if (isContainer(l)) continue;
+    if (l.bedrooms) seen.add(l.bedrooms);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/** Whether a listing satisfies a minimum-bedrooms filter; "" means no filter. */
+export function matchesBedrooms(l: Listing, minBeds: string): boolean {
+  if (!minBeds) return true;
+  if (isContainer(l)) return false;
+  return (l.bedrooms ?? 0) >= Number(minBeds);
 }

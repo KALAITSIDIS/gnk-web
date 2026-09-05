@@ -38,7 +38,11 @@ export interface Listing {
   /* The firm's own judgement, written in the CRM's Marketing tab. Joined the
      feed's allowlist in gnk-crm migration 0085. Optional because a feed
      served before that migration simply will not carry it, and an absent
-     view is the same as an empty one: the page falls back to the summary. */
+     view is the same as an empty one. What the page shows in its place is
+     decided in app/properties/[reference]/page.tsx, not here: the summary —
+     unless the summary merely repeats the opening of the description, in
+     which case nothing. PAF0003 is that case, and four sentences across the
+     two repos said "falls back to the summary" as if it were not. */
   adviser_view?: Multilang;
   public_description: Multilang;
   district: Multilang;
