@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { site } from "@/lib/site";
+import { label } from "@/lib/format";
 import {
   AREAS,
   BUDGETS,
@@ -233,7 +234,7 @@ export function EnquiryForm({
                 <option value="">Select…</option>
                 {PROPERTY_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t.replace(/_/g, " ")}
+                    {label(t)}
                   </option>
                 ))}
               </select>
@@ -343,7 +344,7 @@ export function EnquiryForm({
                 <option value="">Select…</option>
                 {PROPERTY_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t.replace(/_/g, " ")}
+                    {label(t)}
                   </option>
                 ))}
               </select>
