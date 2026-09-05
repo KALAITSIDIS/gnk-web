@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getListing, getListings } from "@/lib/crm";
 import {
   area,
@@ -79,6 +79,13 @@ export default async function PropertyPage({
   if (!found.ok) throw new Error(`Feed unavailable; refusing to 404 ${reference}`);
   if (!found.listing) notFound();
   const l = found.listing;
+
+  /* getListing matches case-insensitively, so /properties/paf0001 answered 200
+     with the same content as /properties/PAF0001 — two live URLs for one
+     property. The canonical tag added earlier tells a search engine which is
+     which; this stops the duplicate existing at all, and sends anyone who typed
+     it, or any link written that way, to the spelling the CRM actually uses. */
+  if (reference !== l.reference) permanentRedirect(`/properties/${l.reference}`);
 
   const images = l.images ?? [];
   const cover = images.find((i) => i.is_cover) ?? images[0];

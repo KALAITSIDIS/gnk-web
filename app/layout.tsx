@@ -5,6 +5,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { SITE_URL } from "@/lib/site-url";
+import { site } from "@/lib/site";
 
 const newsreader = Newsreader({
   subsets: ["latin"],
@@ -36,7 +37,15 @@ export const metadata: Metadata = {
     // NO `url` here. It is inherited by every route, so setting it once made
     // /selling, /properties and every listing tell a share dialog they were the
     // home page. Each page states its own through pageMeta().
+    //
+    // The image IS inherited on purpose: without it a shared link to anything
+    // other than a listing showed no picture at all, which on WhatsApp — where
+    // Cyprus property actually spreads — is the difference between a card and a
+    // line of grey text. A listing sets its own photograph in generateMetadata
+    // and overrides this by normal metadata merging.
+    images: [{ url: "/api/og", width: 1200, height: 630, alt: site.name }],
   },
+  twitter: { card: "summary_large_image" },
   robots: { index: true, follow: true },
 };
 
