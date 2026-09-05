@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Listing } from "@/lib/crm";
 import { area, coverImage, deedLabel, label, placeLine, priceLabel, text, titleOf } from "@/lib/format";
-import { adviserView } from "@/lib/views";
 
 /**
  * The card, in the anatomy this market has converged on: photograph, price
@@ -11,8 +10,9 @@ import { adviserView } from "@/lib/views";
  * scan this one without relearning it.
  *
  * The line under the specification is the part none of them has — but only
- * when it is genuinely the adviser's, which is why it takes lib/views.ts first
- * and falls back to the feed's summary. The accent rule marks a judgement, so
+ * when it is genuinely the adviser's, which is why it takes the feed's
+ * adviser_view first and falls back to the summary. The accent rule marks a
+ * judgement, so
  * it is reserved for one: the same styling on a portal-register line ("prime
  * residential land... excellent development potential") claims something the
  * sentence does not deliver, and a seller judges how this firm would market
@@ -24,7 +24,7 @@ import { adviserView } from "@/lib/views";
 export function PropertyCard({ listing, priority = false }: { listing: Listing; priority?: boolean }) {
   const cover = coverImage(listing);
   const photos = listing.images?.length ?? 0;
-  const view = adviserView(listing.reference);
+  const view = text(listing.adviser_view);
   const summary = text(listing.short_description);
   const deed = deedLabel(listing.title_deed_status);
   const isProject = listing.kind === "project" || listing.kind === "phase";

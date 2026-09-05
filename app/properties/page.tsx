@@ -14,11 +14,11 @@ export const metadata: Metadata = {
   ...pageMeta("/properties"),
   title: "Properties",
   // NOT "every property carries a written view from the adviser who holds it".
-  // lib/views.ts is empty, so that was true of zero of the published listings —
+  // No published listing carried one, so that sentence was true of none of them
   // and unlike the on-page copy it went out in search results and every shared
-  // link, where nobody could see it was false. It may only come back when
-  // adviserViews covers every published reference: metadata must never lead the
-  // state of that file.
+  // link, where nobody could see it was false. The views live in the CRM now
+  // (gnk-crm 0085, adviser_view) and arrive through the feed, so this may only
+  // come back once EVERY published listing has one. Metadata must never lead the data.
   description:
     "Current mandates in Paphos and across Cyprus. We will tell you what we think a property is worth and why, in writing.",
 };
