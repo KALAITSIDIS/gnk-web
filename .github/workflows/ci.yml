@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # lib/format.test.ts pins the eight functions that decide whether a fact
+      # reaches a buyer. It matters most for the one case nobody can check by
+      # looking: no development has ever been published, so how a container
+      # renders is proven here or not at all - and the CRM's quality gate scores
+      # such a record 100/100, because it measures whether fields are filled
+      # rather than whether they are true.
+      - name: Test
+        run: npm run test
+
+      # Deliberately NO env and NO secrets. The build calls the CRM's PUBLIC
+      # feed through generateStaticParams, and getListings returns { ok: false }
+      # on any transport failure, so with no network it simply prebuilds no
+      # listing pages and exits 0 - they render on demand instead. If this step
+      # ever needs a credential, something has started reaching for one at build
+      # time and THAT is the thing to investigate: this site holds no secrets by
+      # design.
+      - name: Build
+        run: npm run build
