@@ -1,3 +1,5 @@
+import { site } from "@/lib/site";
+
 /**
  * Where this site lives, in ONE place.
  *
@@ -20,24 +22,43 @@ export function absolute(path: string): string {
 }
 
 /**
- * The two URL facts every page has to state about itself.
+ * The OpenGraph fields every page shares.
  *
- * WHY A HELPER RATHER THAN EIGHT HAND-WRITTEN PAIRS. `og:url` is not
- * decoration: Facebook and LinkedIn treat it as the IDENTITY of the shared
- * object, so a wrong one attributes a shared /selling link to the home page and
- * consolidates its engagement there. The root layout used to set it once, which
- * meant every page on the site claimed to be the home page. A canonical is the
- * same fact told to search engines, and there was none at all — with
- * case-variant listing URLs answering 200, that is a live duplicate-content
- * exposure.
+ * THEY HAVE TO BE REPEATED PER PAGE, and that is not a style choice. Next
+ * merges metadata SHALLOWLY: an `openGraph` object in a page REPLACES the one
+ * in the layout rather than merging into it. Setting `openGraph: { url }` per
+ * page — which is what naming each page correctly requires — therefore silently
+ * deleted the layout's type, locale, siteName and image from every page that
+ * did it. Nothing failed; the tags simply stopped being emitted, which is only
+ * visible by reading the served HTML.
  *
- * Both are relative on purpose: Next resolves them against metadataBase, which
- * reads SITE_URL above, so the domain cutover changes one line and every
- * canonical and og:url on the site follows.
+ * So the shared half lives here and every page spreads it. A page that needs a
+ * different image (a listing, which has a photograph) overrides just that key.
+ */
+export const OG_BASE = {
+  type: "website" as const,
+  locale: "en",
+  siteName: site.name,
+  images: [{ url: "/api/og", width: 1200, height: 630, alt: site.name }],
+};
+
+/**
+ * The two URL facts every page has to state about itself, plus the shared
+ * OpenGraph block it would otherwise destroy.
+ *
+ * `og:url` is not decoration: Facebook and LinkedIn treat it as the IDENTITY of
+ * the shared object, so a wrong one attributes a shared /selling link to the
+ * home page. The root layout used to set it once, which meant every page
+ * claimed to be the home page. A canonical is the same fact told to search
+ * engines, and there was none at all.
+ *
+ * Both paths are relative on purpose: Next resolves them against metadataBase,
+ * which reads SITE_URL above, so the domain cutover changes one line and every
+ * canonical, og:url and card on the site follows.
  */
 export function pageMeta(path: string) {
   return {
     alternates: { canonical: path },
-    openGraph: { url: path },
+    openGraph: { ...OG_BASE, url: path },
   };
 }
