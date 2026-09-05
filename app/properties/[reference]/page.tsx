@@ -44,12 +44,20 @@ export async function generateMetadata({
   const l = found.listing;
   const description = text(l.short_description) || text(l.public_description).slice(0, 200) || placeLine(l);
   const cover = (l.images ?? []).find((i) => i.is_cover) ?? (l.images ?? [])[0];
+  /* A listing is the most-shared page on the site, and it had neither a
+     canonical nor an og:url — so a shared link carried the layout's root value
+     and a share dialog treated a EUR 450,000 villa as the home page. It also
+     makes the case-variant URL (/properties/paf0001, which answers 200) point
+     at the canonical spelling. */
+  const path = `/properties/${l.reference}`;
   return {
     title: titleOf(l),
     description,
+    alternates: { canonical: path },
     openGraph: {
       title: titleOf(l),
       description,
+      url: path,
       images: cover?.card ? [cover.card] : undefined,
     },
   };

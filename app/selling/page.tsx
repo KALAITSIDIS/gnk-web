@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site-url";
 import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
 
 export const metadata: Metadata = {
+  ...pageMeta("/selling"),
   title: "Selling your property",
   description:
     "What instructing us involves, what we do before anything is marketed, and what we will need from you. For owners in Paphos and across Cyprus.",

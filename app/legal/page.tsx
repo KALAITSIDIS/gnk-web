@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
+  ...pageMeta("/legal"),
   title: "Privacy & legal",
   description: "How GN Kalaitsidis Capital handles your data, and the terms this site is offered on.",
 };

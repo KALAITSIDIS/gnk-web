@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site-url";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
+  ...pageMeta("/contact"),
   title: "Contact",
   description:
     "Talk to GN Kalaitsidis Capital in Paphos, Cyprus. Two named advisers, direct — by phone, WhatsApp or email.",

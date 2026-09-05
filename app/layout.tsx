@@ -33,7 +33,9 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en",
     siteName: "GN Kalaitsidis Capital",
-    url: SITE_URL,
+    // NO `url` here. It is inherited by every route, so setting it once made
+    // /selling, /properties and every listing tell a share dialog they were the
+    // home page. Each page states its own through pageMeta().
   },
   robots: { index: true, follow: true },
 };

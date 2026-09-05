@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site-url";
 import { getListings } from "@/lib/crm";
 import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
@@ -10,6 +11,7 @@ import { PropertySearch } from "@/components/property-search";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
+  ...pageMeta("/properties"),
   title: "Properties",
   // NOT "every property carries a written view from the adviser who holds it".
   // lib/views.ts is empty, so that was true of zero of the published listings —
