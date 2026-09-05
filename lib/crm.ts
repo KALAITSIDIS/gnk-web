@@ -35,6 +35,11 @@ export interface Listing {
   transaction_type: string;
   title: Multilang;
   short_description: Multilang;
+  /* The firm's own judgement, written in the CRM's Marketing tab. Joined the
+     feed's allowlist in gnk-crm migration 0085. Optional because a feed
+     served before that migration simply will not carry it, and an absent
+     view is the same as an empty one: the page falls back to the summary. */
+  adviser_view?: Multilang;
   public_description: Multilang;
   district: Multilang;
   area: Multilang;

@@ -21,7 +21,6 @@ import {
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { ListingContactBar } from "@/components/listing-contact-bar";
-import { adviserView } from "@/lib/views";
 import { absolute, OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
@@ -110,7 +109,11 @@ export default async function PropertyPage({
   /* False for a development: its unit-shaped fields belong to no dwelling. */
   const unitFacts = !isContainer(l);
   const summary = text(l.short_description);
-  const view = adviserView(l.reference);
+  /* From the FEED now, not a code file. It used to live in lib/views.ts,
+     which meant only a developer with a deploy could publish a view — for a
+     two-person firm that is the same as impossible. gnk-crm 0085 made it a
+     field in the Marketing tab. */
+  const view = text(l.adviser_view);
   const body = text(l.public_description);
 
   /* The measurements a buyer compares on, and the ones a Cyprus buyer asks
