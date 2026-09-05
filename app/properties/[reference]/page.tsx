@@ -19,6 +19,7 @@ import {
   vatLabel,
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
+import { ListingContactBar } from "@/components/listing-contact-bar";
 import { adviserView } from "@/lib/views";
 import { absolute, OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
@@ -187,7 +188,8 @@ export default async function PropertyPage({
   };
 
   return (
-    <article className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
+    // pb-24 on mobile keeps the fixed bar from covering the end of the page
+    <article className="mx-auto max-w-7xl px-5 py-10 pb-24 sm:px-8 lg:pb-10">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -340,7 +342,7 @@ export default async function PropertyPage({
           </section>
         </div>
 
-        <div className="lg:sticky lg:top-8">
+        <div id="enquire" className="scroll-mt-6 lg:sticky lg:top-8">
           <EnquiryForm
             reference={l.reference}
             heading="Ask about this property"
@@ -349,6 +351,8 @@ export default async function PropertyPage({
           />
         </div>
       </div>
+
+      <ListingContactBar reference={l.reference} />
     </article>
   );
 }
