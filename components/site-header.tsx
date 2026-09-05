@@ -33,8 +33,18 @@ export function SiteHeader() {
       </div>
 
       {/* The nav has to survive a phone; a hamburger that needs JavaScript to
-          open is not worth the risk on a five-item menu. */}
-      <nav aria-label="Main, mobile" className="border-t border-line md:hidden">
+          open is not worth the risk on a six-item menu.
+ 
+          It no longer fits: at 375px the row is 462px wide, so 87px hang off the
+          right and "Contact" — a primary call to action — starts out of sight.
+          It has always scrolled, but the only hint was a clipped word. The fade
+          below says so. pointer-events-none, so it cannot swallow a tap on the
+          item it sits over. */}
+      <nav aria-label="Main, mobile" className="relative border-t border-line md:hidden">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-surface to-transparent"
+        />
         <ul className="mx-auto flex max-w-7xl gap-5 overflow-x-auto px-5 py-2.5 text-sm text-ink-2">
           {nav.map((item) => (
             <li key={item.href} className="shrink-0">
