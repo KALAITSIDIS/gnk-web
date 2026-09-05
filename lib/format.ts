@@ -21,12 +21,40 @@ export function money(n: number | null | undefined): string | null {
  * What a listing costs, said the way its transaction works. A rental priced
  * per month and a sale priced outright must never render identically.
  */
+/**
+ * A development is not a dwelling, and almost nothing on a container describes
+ * something a buyer can buy.
+ *
+ * The CRM is explicit about this — "a container's price is its units' prices;
+ * the container's own asking_price is a 'from' figure" — and its create wizard
+ * labels that field "From price". The units carry the beds, the baths and the
+ * area; the container's own copies of those fields are whatever was typed when
+ * the record was made, and they are frequently NOT the units' figures.
+ *
+ * Measured on PAF0002 before it was published: the container reads 5 bedrooms,
+ * 5 bathrooms and 300 m² while its six villas are 4, 4 and 250 — so the page
+ * would have stated four wrong facts, plus a €/m² of 800000/300 computed from
+ * two numbers that do not describe the same object. The publish gate scores
+ * that record 100/100, because the gate measures whether fields are filled and
+ * not whether they are true.
+ *
+ * So: a container prices "from", and its unit-shaped rows are withheld. What is
+ * genuinely true of a development — that it is one, its build stage and its
+ * delivery date — still renders.
+ */
+export function isContainer(l: Listing): boolean {
+  return l.kind === "project" || l.kind === "phase";
+}
+
 export function priceLabel(l: Listing): string {
   if (l.transaction_type === "rent") {
     const rent = money(l.rent_price_month);
     return rent ? `${rent} / month` : "Price on application";
   }
-  return money(l.asking_price) ?? "Price on application";
+  const price = money(l.asking_price);
+  if (!price) return "Price on application";
+  // "from", because the units carry the real prices and this is the lowest.
+  return isContainer(l) ? `from ${price}` : price;
 }
 
 export function area(n: number | null | undefined): string | null {
@@ -36,6 +64,9 @@ export function area(n: number | null | undefined): string | null {
 
 /** €/m² — the number an advisory firm is expected to have already worked out. */
 export function pricePerSqm(l: Listing): string | null {
+  // A container's "from" price over a container's own covered area is a ratio
+  // between two unrelated numbers. See isContainer above.
+  if (isContainer(l)) return null;
   const price = l.transaction_type === "rent" ? null : l.asking_price;
   const size = l.covered_area_sqm;
   if (!price || !size || Number(size) <= 0) return null;
@@ -202,7 +233,7 @@ function isUnitInABuilding(l: Listing): boolean {
  * how many storeys it has — so it is said separately rather than suppressed.
  */
 export function floorLabel(l: Listing): string | null {
-  if (!isUnitInABuilding(l)) return null;
+  if (isContainer(l) || !isUnitInABuilding(l)) return null;
   return l.floor_number !== null && l.total_floors
     ? `${l.floor_number} of ${l.total_floors}`
     : null;
@@ -210,6 +241,6 @@ export function floorLabel(l: Listing): string | null {
 
 /** How many storeys a whole dwelling has. Meaningless for land, and for a unit. */
 export function storeysLabel(l: Listing): string | null {
-  if (l.property_type === "land" || isUnitInABuilding(l)) return null;
+  if (isContainer(l) || l.property_type === "land" || isUnitInABuilding(l)) return null;
   return l.total_floors && l.total_floors > 1 ? String(l.total_floors) : null;
 }
