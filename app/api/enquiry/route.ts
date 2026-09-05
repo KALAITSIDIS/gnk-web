@@ -6,6 +6,7 @@ import {
   assembleMessage,
   BUYER_KEYS,
   describeProperty,
+  FIELD_CAPS,
   describeRequirement,
   SELLER_KEYS,
   type BuyerFields,
@@ -41,30 +42,37 @@ const schema = z.object({
   /** Consent is recorded because the CRM stores personal data (GDPR Art. 6). */
   consent: z.literal(true, { message: "Please confirm you are happy for us to reply." }),
   website: z.string().max(200).optional(),
-  /* An owner's answers about their own property. All optional on purpose: the
-     contact details are what make a lead, and a form that refuses to send until
-     someone remembers their plot size is a form that does not get sent. Kept as
-     strings rather than coerced to numbers — "about 180" is a real answer, and
-     rejecting it would lose an enquiry over a formatting opinion. */
-  district: z.string().trim().max(60).optional(),
-  area: z.string().trim().max(80).optional(),
-  property_type: z.string().trim().max(40).optional(),
-  bedrooms: z.string().trim().max(20).optional(),
-  covered_area_sqm: z.string().trim().max(20).optional(),
-  plot_area_sqm: z.string().trim().max(20).optional(),
-  year_built: z.string().trim().max(20).optional(),
-  title_deed_status: z.string().trim().max(40).optional(),
-  listed_elsewhere: z.string().trim().max(40).optional(),
-  timing: z.string().trim().max(40).optional(),
-  /* And what a buyer is looking for. Same reasoning: all optional, capped
-     rather than typed, because the contact details are what make a lead. */
-  looking_to: z.string().trim().max(40).optional(),
-  budget: z.string().trim().max(40).optional(),
-  buy_area: z.string().trim().max(80).optional(),
-  buy_property_type: z.string().trim().max(40).optional(),
-  bedrooms_min: z.string().trim().max(20).optional(),
-  deed_required: z.string().trim().max(40).optional(),
-  buy_timing: z.string().trim().max(40).optional(),
+  /* An owner's answers about their own property, and a buyer's about what they
+     want. All optional on purpose: the contact details are what make a lead,
+     and a form that refuses to send until someone remembers their plot size is
+     a form that does not get sent. Kept as strings rather than coerced to
+     numbers — "about 180" is a real answer, and rejecting it would lose an
+     enquiry over a formatting opinion.
+
+     Written out one per line, but the LENGTHS come from FIELD_CAPS. They used
+     to be literals here while lib/enquiry-fields.ts held a second copy for
+     computing the message budget, so raising one would silently make the other
+     wrong and the form would advertise a budget the route could not honour.
+     Generating these keys from the list instead would be shorter and would cost
+     zod's inference — d.district would stop being typed, and the flattening
+     below depends on it. */
+  district: z.string().trim().max(FIELD_CAPS.district).optional(),
+  area: z.string().trim().max(FIELD_CAPS.area).optional(),
+  property_type: z.string().trim().max(FIELD_CAPS.property_type).optional(),
+  bedrooms: z.string().trim().max(FIELD_CAPS.bedrooms).optional(),
+  covered_area_sqm: z.string().trim().max(FIELD_CAPS.covered_area_sqm).optional(),
+  plot_area_sqm: z.string().trim().max(FIELD_CAPS.plot_area_sqm).optional(),
+  year_built: z.string().trim().max(FIELD_CAPS.year_built).optional(),
+  title_deed_status: z.string().trim().max(FIELD_CAPS.title_deed_status).optional(),
+  listed_elsewhere: z.string().trim().max(FIELD_CAPS.listed_elsewhere).optional(),
+  timing: z.string().trim().max(FIELD_CAPS.timing).optional(),
+  looking_to: z.string().trim().max(FIELD_CAPS.looking_to).optional(),
+  budget: z.string().trim().max(FIELD_CAPS.budget).optional(),
+  buy_area: z.string().trim().max(FIELD_CAPS.buy_area).optional(),
+  buy_property_type: z.string().trim().max(FIELD_CAPS.buy_property_type).optional(),
+  bedrooms_min: z.string().trim().max(FIELD_CAPS.bedrooms_min).optional(),
+  deed_required: z.string().trim().max(FIELD_CAPS.deed_required).optional(),
+  buy_timing: z.string().trim().max(FIELD_CAPS.buy_timing).optional(),
 });
 
 
