@@ -24,7 +24,7 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # lib/format.test.ts pins the eight functions that decide whether a fact
+      # lib/format.test.ts pins the functions that decide whether a fact
       # reaches a buyer. It matters most for the one case nobody can check by
       # looking: no development has ever been published, so how a container
       # renders is proven here or not at all - and the CRM's quality gate scores
