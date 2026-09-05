@@ -179,31 +179,53 @@ export function assembleMessage(visitorMessage: string | undefined, block: strin
  * The server guarantees the cap either way; this stops the form promising a
  * budget the route cannot honour.
  */
+/**
+ * The maximum length the route accepts for each answer.
+ *
+ * ONE DECLARATION, used by BOTH the route's schema and the worst-case below.
+ * They were written out twice — zod caps in app/api/enquiry/route.ts and a
+ * parallel set of "x".repeat(n) here — with nothing binding them. Raising a cap
+ * in the schema would have left this function under-reserving, so the textarea
+ * would advertise a budget the route could not honour, which is precisely the
+ * bug the budget exists to prevent. Found by a test that used the wrong lengths
+ * and failed, which is the only reason the duplication surfaced at all.
+ */
+export const FIELD_CAPS = {
+  district: 60,
+  area: 80,
+  property_type: 40,
+  bedrooms: 20,
+  covered_area_sqm: 20,
+  plot_area_sqm: 20,
+  year_built: 20,
+  title_deed_status: 40,
+  listed_elsewhere: 40,
+  timing: 40,
+  looking_to: 40,
+  budget: 40,
+  buy_area: 80,
+  buy_property_type: 40,
+  bedrooms_min: 20,
+  deed_required: 40,
+  buy_timing: 40,
+} as const satisfies Record<(typeof SELLER_KEYS)[number] | (typeof BUYER_KEYS)[number], number>;
+
+const atCap = (keys: readonly string[]) =>
+  Object.fromEntries(
+    keys.map((k) => [k, "x".repeat(FIELD_CAPS[k as keyof typeof FIELD_CAPS])]),
+  );
+
+/**
+ * What the textarea may honestly advertise, given what gets appended to it.
+ * The server guarantees the cap either way; this stops the form promising a
+ * budget the route cannot keep.
+ */
 export function messageBudget(kind: "buyer" | "seller" | null): number {
   if (!kind) return CRM_MESSAGE_CAP - CONSENT_LINE.length - 2;
   const worst =
     kind === "seller"
-      ? describeProperty({
-          district: "x".repeat(60),
-          area: "x".repeat(80),
-          property_type: "x".repeat(40),
-          bedrooms: "x".repeat(20),
-          covered_area_sqm: "x".repeat(20),
-          plot_area_sqm: "x".repeat(20),
-          year_built: "x".repeat(20),
-          title_deed_status: "x".repeat(40),
-          listed_elsewhere: "x".repeat(40),
-          timing: "x".repeat(40),
-        })
-      : describeRequirement({
-          looking_to: "x".repeat(40),
-          budget: "x".repeat(40),
-          buy_area: "x".repeat(80),
-          buy_property_type: "x".repeat(40),
-          bedrooms_min: "x".repeat(20),
-          deed_required: "x".repeat(40),
-          buy_timing: "x".repeat(40),
-        });
+      ? describeProperty(atCap(SELLER_KEYS))
+      : describeRequirement(atCap(BUYER_KEYS));
   return CRM_MESSAGE_CAP - (worst ?? "").length - 2 - CONSENT_LINE.length - 2;
 }
 
