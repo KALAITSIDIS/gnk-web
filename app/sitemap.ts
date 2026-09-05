@@ -4,29 +4,32 @@ import { getListings } from "@/lib/crm";
 import { SITE_URL } from "@/lib/site-url";
 
 /**
- * WITHOUT THIS LINE the promise in the comment below is false.
+ * MEASURED, NOT ASSUMED — and the first attempt at this was wrong.
  *
- * A sitemap route with no dynamic config option is prerendered once at build
- * time and served from cache forever ("sitemap.js is a special Route Handler
- * that is cached by default unless it uses a Request-time API or dynamic
- * config option" — Next 16 docs), so the document would stay frozen at whatever
- * happened to be published on deploy day: precisely the staleness it was
- * written to end.
+ * A sitemap route is prerendered once at build time and served forever ("a
+ * special Route Handler that is cached by default unless it uses a Request-time
+ * API or dynamic config option" — Next 16 docs). On 2026-09-04 that meant
+ * publishing a property never reached sitemap.xml, which is the exact staleness
+ * the comment below says this file exists to end.
  *
- * Measured on 2026-09-04: PAF0003 was published in the CRM and appeared in the
- * feed and on /properties within seconds, while sitemap.xml still listed one
- * property and returned `Age: 4829` on a cache HIT.
+ * `export const revalidate = 60` was added and looked right: `next build`
+ * reported /sitemap.xml at "1m 1y", alongside the genuinely revalidating pages.
+ * IT DID NOT WORK. When PAF0004 was published on 2026-09-05, /properties served
+ * it within seconds while sitemap.xml still listed two properties 140 seconds
+ * later — Age climbing past 200, X-Vercel-Cache: HIT, and no X-Nextjs-Prerender
+ * header at all, unlike the ISR pages beside it. A cache-busting query string
+ * returned the same stale document, so the origin itself was frozen, not the
+ * edge. The build table reported the intent, not the behaviour.
  *
- * 60 to match FEED_REVALIDATE deliberately. The effective cadence is the
- * MINIMUM of this and the feed fetch's own revalidate, so a larger number here
- * would be silently overridden and would read as a promise the build does not
- * keep — `next build` reports this route at 1m either way.
+ * force-dynamic renders the route per request instead. A sitemap is read by
+ * crawlers, not people, so the cost is negligible — and correctness here is
+ * worth more than a cached document, because a sitemap nobody can trust is
+ * worse than no sitemap at all.
  *
- * Must stay a literal; and note it disappears entirely if Cache Components is
- * ever enabled (removed in v16.0.0 under that flag), which would silently
- * restore the bug.
+ * The lesson is the measurement: the only proof a cache behaves is watching new
+ * data cross it.
  */
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 /**
  * Generated from the feed, so publishing a property in the CRM puts it in the
