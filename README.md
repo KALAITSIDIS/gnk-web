@@ -5,7 +5,7 @@ The public website for GN Kalaitsidis Capital.
 Intended to replace the holding page currently served at
 **www.kalaitsidis.com**. Deployed meanwhile at `gnk-web.vercel.app`.
 
-## It holds no credentials
+## It holds one secret, and that secret grants nothing
 
 The site is a CLIENT of the CRM's public API and nothing else:
 
@@ -21,16 +21,30 @@ compromised, the blast radius is "read published listings and submit an
 enquiry" — which is what any visitor can already do. That property is
 deliberate; do not trade it away for convenience.
 
+The one secret is `CRM_FORWARD_KEY` (since 2026-09-06). It proves to the CRM
+that an enquiry came through this site, so the CRM meters the visitor we
+forward rather than metering the whole site as one address. It opens no door
+and reads nothing: an attacker holding it gains a per-visitor enquiry budget
+of five where a stranger gets a shared one. It lives in the Vercel
+environment of both projects and nowhere in either repo; `lib/env.test.ts`
+allows exactly that one secret-shaped name and fails on any other.
+
 ## Configuration
 
-Three environment variables, all optional, each read in exactly one file
+Four environment variables, all optional, each read in exactly one file
 beside its production default:
 
 | | read at | default |
 |---|---|---|
 | `CRM_API_URL` | `lib/crm.ts` | `https://gnk-crm.vercel.app` |
+| `CRM_FORWARD_KEY` | `lib/crm.ts` | `` |
 | `CRM_ORG_SLUG` | `lib/crm.ts` | `gnk` |
 | `SITE_URL` | `lib/site-url.ts` | `https://gnk-web.vercel.app` |
+
+`CRM_FORWARD_KEY` unset is not broken, it is weaker: the CRM then meters
+this site's egress address as one visitor, and the sixth enquiry in any
+quarter of an hour — from anyone — is refused. Set it to the same value as
+the CRM's `ENQUIRY_FORWARD_KEY`.
 
 `SITE_URL` is the domain cut-over. The day www.kalaitsidis.com points here,
 set it to `https://www.kalaitsidis.com` and every canonical, og:url, sitemap

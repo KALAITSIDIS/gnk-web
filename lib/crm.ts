@@ -6,6 +6,12 @@
  * tomorrow, the attacker would gain the ability to read published listings and
  * submit an enquiry, which is what any visitor already has. Keep it that way.
  *
+ * The ONE secret it holds, CRM_FORWARD_KEY, proves to the CRM that an enquiry
+ * came through this site — so the CRM meters the visitor we forward instead
+ * of metering the whole site as one address. It lifts no limit, reads nothing
+ * and unlocks nothing; stolen, it is worth a per-visitor budget of five where
+ * a stranger gets a shared one. See submitEnquiry.
+ *
  * Feed contract: migrations 0066 (the feed), 0073 (image renditions), 0084
  * (the enquiry door) and 0085 (adviser_view; the current body of
  * public_listings) in KALAITSIDIS/gnk-crm.
@@ -246,15 +252,26 @@ export async function submitEnquiry(
    * theirs — and a shell loop could hold the firm's only inbound channel shut
    * for nothing. The CRM still meters this site's transport IP separately, so
    * forging the header buys a fresh per-visitor budget but not an escape.
+   *
+   * SINCE 2026-09-06 THE CRM BELIEVES THIS HEADER ONLY FROM US. It is sent
+   * with x-gnk-forward-key, the shared secret the CRM compares in constant
+   * time (gnk-crm lib/services/forwarder.ts); from anyone else the header is
+   * ignored and the sender is metered as itself. With no CRM_FORWARD_KEY
+   * configured here we are that anyone: every visitor shares one budget of
+   * five again, the failure the header was added to end — so README's
+   * configuration table names the variable, and this file reads it at call
+   * time, as the platform binds it.
    */
   clientIp?: string,
 ): Promise<EnquiryResult> {
+  const forwardKey = process.env.CRM_FORWARD_KEY ?? "";
   try {
     const res = await fetch(`${CRM}/api/public/enquiries`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(clientIp ? { "x-gnk-visitor-ip": clientIp } : {}),
+        ...(forwardKey ? { "x-gnk-forward-key": forwardKey } : {}),
       },
       body: JSON.stringify({ org: ORG, ...input }),
       cache: "no-store",

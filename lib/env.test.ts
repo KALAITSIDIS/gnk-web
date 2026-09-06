@@ -58,9 +58,16 @@ describe("README's configuration table is the code's, not a copy of it", () => {
     expect(rowsInReadme()).toEqual(code);
   });
 
-  it("proves the site reads no credential", () => {
-    // README § "It holds no credentials" — a promise this scan keeps.
-    for (const read of readsInCode()) {
+  it("proves the site reads no credential but the one README names", () => {
+    // README § "It holds one secret, and that secret grants nothing" — a
+    // promise this scan keeps. CRM_FORWARD_KEY is the one allowed: it proves
+    // to the CRM that an enquiry came through this site and nothing more.
+    // Anything else secret-shaped is the thing the section forbids.
+    const THE_ONE = "CRM_FORWARD_KEY | lib/crm.ts | ";
+    const reads = readsInCode();
+    expect(reads, "the one secret is read where README says").toContain(THE_ONE);
+    for (const read of reads) {
+      if (read === THE_ONE) continue;
       expect(read).not.toMatch(/SUPABASE|SERVICE_ROLE|SECRET|TOKEN|KEY/);
     }
   });
