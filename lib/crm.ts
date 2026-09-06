@@ -99,10 +99,10 @@ interface FeedResponse {
 /**
  * Every published listing.
  *
- * The whole feed in one request, deliberately: at this scale paging costs a
- * round trip and buys nothing, and holding the full set lets the search page
- * filter without a second call. If the portfolio ever outgrows one page this
- * is where paging goes — the caller's shape does not change.
+ * The whole feed, every page of it, in one call: holding the full set lets
+ * the search page filter without a second request, and the callers' shape
+ * does not change as the book grows — see getListings for how the pages are
+ * read and why nothing partial is ever returned.
  *
  * A transport failure is REPORTED, not flattened into an empty list. The old
  * contract returned [] for a 503, a timeout and a genuinely empty book alike,
@@ -117,28 +117,85 @@ export type FeedResult = { ok: true; listings: Listing[] } | { ok: false };
 /** Long enough for a cold CRM function, short enough that nobody watches a spinner. */
 const FEED_TIMEOUT_MS = 8000;
 
+/**
+ * The feed pages, and the site used to read one page. `limit=100` was written
+ * here, once, as the whole book — so the 101st mandate would have answered 404
+ * on its own page, vanished from the sitemap and the search, silently. The CRM
+ * caps a page and ECHOES the cap in every response; this loop reads that back
+ * rather than carrying its own copy of the number, and stops on the first short
+ * page. Nothing partial is ever served: a page that fails, or a feed that keeps
+ * returning full pages past MAX_PAGES, is {ok:false} for the whole call.
+ *
+ * Between pages the book can lawfully change — the CRM's edge holds a body for
+ * up to 60s, so page 2 may come from a newer snapshot than page 1. The ETag's
+ * hash prefix is that snapshot's name; on a mismatch the loop runs once more,
+ * and if the book is still moving it serves the union and says so, because
+ * refusing would take the whole site down for a minute after every publish.
+ */
+const MAX_PAGES = 50;
+
 export async function getListings(): Promise<FeedResult> {
+  const first = await readAllPages();
+  if (!first.result.ok || !first.moved) return first.result;
+  const again = await readAllPages();
+  if (again.result.ok && again.moved) {
+    console.warn("[crm] feed changed between pages twice; serving the union");
+  }
+  return again.result;
+}
+
+/** The pages read, plus whether the book moved underneath the read. */
+type PagedRead = { result: FeedResult; moved: boolean };
+
+async function readAllPages(): Promise<PagedRead> {
+  const listings: Listing[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+  let snapshot: string | null = null;
+  let moved = false;
   try {
-    const res = await fetch(`${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&limit=100`, {
-      next: { revalidate: FEED_REVALIDATE },
-      // Without this a CRM that accepts the connection and never answers hangs
-      // until the platform kills the function, and the visitor gets a 504 on
-      // the home page rather than the graceful degradation below.
-      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      console.error(`[crm] feed responded ${res.status}`);
-      return { ok: false };
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const res = await fetch(
+        `${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&offset=${offset}`,
+        {
+          next: { revalidate: FEED_REVALIDATE },
+          // Without this a CRM that accepts the connection and never answers
+          // hangs until the platform kills the function, and the visitor gets
+          // a 504 on the home page rather than the graceful degradation below.
+          signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+        },
+      );
+      if (!res.ok) {
+        console.error(`[crm] feed responded ${res.status} at offset ${offset}`);
+        return { result: { ok: false }, moved };
+      }
+      const body = (await res.json()) as FeedResponse;
+      if (!Array.isArray(body.listings)) {
+        console.error("[crm] feed body had no listings array");
+        return { result: { ok: false }, moved };
+      }
+      const prefix = (res.headers.get("etag") ?? "").split("-")[0];
+      if (prefix) {
+        if (snapshot === null) snapshot = prefix;
+        else if (prefix !== snapshot) moved = true;
+      }
+      for (const l of body.listings) {
+        if (seen.has(l.reference)) continue; // a boundary duplicate from a moving book
+        seen.add(l.reference);
+        listings.push(l);
+      }
+      // The CRM's cap, read back. A feed that does not say is a one-page feed.
+      const pageSize = typeof body.limit === "number" && body.limit > 0 ? body.limit : null;
+      if (pageSize === null || body.listings.length < pageSize) {
+        return { result: { ok: true, listings }, moved };
+      }
+      offset += body.listings.length;
     }
-    const body = (await res.json()) as FeedResponse;
-    if (!Array.isArray(body.listings)) {
-      console.error("[crm] feed body had no listings array");
-      return { ok: false };
-    }
-    return { ok: true, listings: body.listings };
+    console.error(`[crm] feed still returning full pages after ${MAX_PAGES}; refusing a partial book`);
+    return { result: { ok: false }, moved };
   } catch (err) {
     console.error("[crm] feed unreachable:", err);
-    return { ok: false };
+    return { result: { ok: false }, moved };
   }
 }
 

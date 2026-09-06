@@ -71,6 +71,81 @@ describe("a feed failure is never 'no such property'", () => {
   });
 });
 
+/** A feed of N references served in pages of `size`, exactly as the CRM does it: offset in, `limit` echoed back. */
+const book = (n: number) =>
+  Array.from({ length: n }, (_, i) => listing("PAF" + String(i + 1).padStart(4, "0")));
+const paged =
+  (rows: ReturnType<typeof listing>[], size = 50, etag = 'W/"abc-50-0"') =>
+  (url: string | URL | Request) => {
+    const u = new URL(String(url instanceof Request ? url.url : url));
+    const offset = Number(u.searchParams.get("offset") ?? 0);
+    const page = rows.slice(offset, offset + size);
+    return Promise.resolve(
+      new Response(JSON.stringify({ listings: page, limit: size, offset, count: page.length }), {
+        status: 200,
+        headers: { etag },
+      }),
+    );
+  };
+
+describe("the whole book, page by page", () => {
+  // The site read `limit=100` once and called it the feed. Listing 101 would
+  // have answered 404 on its own page and vanished from the sitemap, silently.
+  it("finds listing 101 and 250 — the pages are read until the first short one", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(paged(book(101)) as never);
+    const r = await getListings();
+    expect(r.ok && r.listings.length).toBe(101);
+    const last = await getListing("PAF0101");
+    expect(last.ok && last.listing?.reference).toBe("PAF0101");
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(paged(book(250)) as never);
+    const big = await getListings();
+    expect(big.ok && big.listings.length).toBe(250);
+  });
+
+  it("reads the page size the CRM echoes, not a number of its own", async () => {
+    const f = vi.spyOn(globalThis, "fetch").mockImplementation(paged(book(120), 40) as never);
+    const r = await getListings();
+    expect(r.ok && r.listings.length).toBe(120);
+    // 120 rows at 40 a page: three full pages, then the short fourth that ends it
+    expect(f.mock.calls.length).toBe(4);
+    for (const [url] of f.mock.calls) expect(String(url)).not.toMatch(/limit=/);
+  });
+
+  it("refuses the whole book when any page fails — never a partial truth", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const good = paged(book(120));
+    vi.spyOn(globalThis, "fetch").mockImplementation(((url: string) => {
+      const offset = Number(new URL(String(url)).searchParams.get("offset") ?? 0);
+      return offset >= 50 ? Promise.resolve(new Response("", { status: 503 })) : good(url);
+    }) as never);
+    expect(await getListings()).toEqual({ ok: false });
+  });
+
+  it("dedupes a reference that straddles a page boundary of a moving book", async () => {
+    const rows = book(60);
+    vi.spyOn(globalThis, "fetch").mockImplementation(((url: string) => {
+      const offset = Number(new URL(String(url)).searchParams.get("offset") ?? 0);
+      // page two repeats the last row of page one, as a freshly inserted
+      // listing shifting the window would make it
+      const page = offset === 0 ? rows.slice(0, 50) : [rows[49]!, ...rows.slice(50)];
+      return Promise.resolve(
+        new Response(JSON.stringify({ listings: page, limit: 50, offset }), { status: 200 }),
+      );
+    }) as never);
+    const r = await getListings();
+    expect(r.ok && r.listings.length).toBe(60);
+  });
+
+  it("refuses a feed that never ends rather than hanging a render", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (() => ok({ listings: book(50), limit: 50 })) as never,
+    );
+    expect(await getListings()).toEqual({ ok: false });
+  });
+});
+
 describe("finding one listing", () => {
   it("matches a reference whatever case it was typed in", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
