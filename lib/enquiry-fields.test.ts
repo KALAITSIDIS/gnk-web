@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  AREAS,
+  areasWithFeed,
   assembleMessage,
   CRM_MESSAGE_CAP,
+  DEED_STATUSES,
   describeProperty,
   describeRequirement,
   FIELD_CAPS,
   messageBudget,
+  PROPERTY_TYPES,
   SELLER_KEYS,
   BUYER_KEYS,
 } from "./enquiry-fields";
@@ -123,5 +127,85 @@ describe("the desk reads English, not tokens", () => {
   it("returns null when nothing was answered, so no empty heading is appended", () => {
     expect(describeProperty({})).toBeNull();
     expect(describeRequirement({})).toBeNull();
+  });
+});
+
+/**
+ * The header says the vocabulary is the CRM's. That used to be a date in prose
+ * — "Verified against the CRM 2026-09-04" — which was false the day it was
+ * written: "hotel" had been in the CRM's list since 2026-07-10 and was never
+ * here. A date cannot fail; this can.
+ *
+ * The site holds no credentials and cannot read the enum, so this is a PINNED
+ * COPY with its provenance, not a live check. It binds the form's list to the
+ * record and makes "the CRM's list" checkable by anyone with the CRM checkout:
+ *   git -C ../gnk-crm show 7e4a008:lib/validators/properties.ts
+ * When the CRM's list changes, re-pin here with the new commit.
+ */
+const CRM_PROPERTY_TYPES = {
+  // gnk-crm@7e4a008 lib/validators/properties.ts PROPERTY_TYPES, in its order
+  source: "gnk-crm@7e4a008 lib/validators/properties.ts",
+  list: [
+    "apartment",
+    "villa",
+    "townhouse",
+    "house",
+    "land",
+    "shop",
+    "office",
+    "building",
+    "hotel",
+    "warehouse",
+    "mixed_use",
+    "other",
+  ],
+  // gnk-crm@7e4a008 lib/validators/properties.ts TITLE_DEED_STATUSES
+  deedStatuses: ["separate", "pending", "shared", "none", "unknown"],
+};
+
+describe("the vocabulary is the CRM's, pinned", () => {
+  it("offers exactly the CRM's property types, in the CRM's order", () => {
+    expect([...PROPERTY_TYPES]).toEqual(CRM_PROPERTY_TYPES.list);
+  });
+
+  it("offers exactly the CRM's deed statuses (reordered and labelled on purpose)", () => {
+    expect([...DEED_STATUSES].map((d) => d.value).sort()).toEqual(
+      [...CRM_PROPERTY_TYPES.deedStatuses].sort(),
+    );
+  });
+});
+
+describe("the buyer picker never lacks an area the CRM is publishing with", () => {
+  // Shapes the feed actually sends: district/area are {en, el, ru} or null.
+  const feed = [
+    { district: { en: "Paphos" }, area: { en: "Peyia" } }, // renamed in Settings after this file was written
+    { district: { en: "Larnaca" }, area: { en: "Oroklini" } }, // a district this file does not list at all
+    { district: { en: "Paphos" }, area: { en: "Kato Paphos" } }, // already listed — must not duplicate
+    { district: { en: "Paphos" }, area: null }, // a listing with no area yet
+    { district: null, area: { en: "Nowhere" } }, // no district → cannot be placed
+  ];
+  const out = areasWithFeed(feed);
+
+  it("keeps everything this file lists", () => {
+    for (const [district, list] of Object.entries(AREAS)) {
+      for (const area of list) expect(out[district]).toContain(area);
+    }
+  });
+
+  it("adds what the feed carries, under the right district, once, sorted", () => {
+    expect(out.Paphos).toContain("Peyia");
+    expect(out.Paphos.filter((a) => a === "Kato Paphos")).toHaveLength(1);
+    expect(out.Larnaca).toEqual(["Oroklini"]);
+    expect(out.Paphos).toEqual([...out.Paphos].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it("ignores what it cannot place, and leaves AREAS itself untouched", () => {
+    expect(JSON.stringify(out)).not.toContain("Nowhere");
+    expect(AREAS.Paphos).not.toContain("Peyia");
+    expect(AREAS).not.toHaveProperty("Larnaca");
+  });
+
+  it("is exactly AREAS when the feed is down", () => {
+    expect(areasWithFeed([])).toEqual(AREAS);
   });
 });

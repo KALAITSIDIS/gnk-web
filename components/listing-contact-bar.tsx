@@ -17,6 +17,16 @@ import { site } from "@/lib/site";
  *
  * MOBILE ONLY (hidden from lg). Above that width the enquiry form is already
  * pinned beside the content with lg:sticky, so a second one would be clutter.
+ *
+ * STICKY, NOT FIXED, and rendered as a sibling AFTER the article inside
+ * <main>. Its containing block ends where the listing ends, so it rides the
+ * viewport bottom while the listing is on screen and scrolls away with it
+ * before the footer. That is what keeps the footer's last line readable on a
+ * phone — the copyright today, the Law 71(I)/2010 licence statement once
+ * lib/site.ts has the numbers — without any other element knowing this bar's
+ * height. (As position: fixed it needed a hand-copied bottom padding on the
+ * article, which guarded the enquiry form and not the footer, and the footer's
+ * last line was hidden on every phone.) listing-contact-bar.test.ts pins both.
  */
 export function ListingContactBar({ reference }: { reference: string }) {
   const wa = `${site.contact.whatsappHref}?text=${encodeURIComponent(
@@ -27,7 +37,7 @@ export function ListingContactBar({ reference }: { reference: string }) {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface lg:hidden"
+      className="sticky bottom-0 z-40 border-t border-line bg-surface lg:hidden"
       // clears the home indicator on a notched phone
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >

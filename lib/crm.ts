@@ -6,8 +6,9 @@
  * tomorrow, the attacker would gain the ability to read published listings and
  * submit an enquiry, which is what any visitor already has. Keep it that way.
  *
- * Feed contract: migrations 0066 (the feed), 0073 (image renditions) and 0084
- * (the enquiry door) in KALAITSIDIS/gnk-crm.
+ * Feed contract: migrations 0066 (the feed), 0073 (image renditions), 0084
+ * (the enquiry door) and 0085 (adviser_view; the current body of
+ * public_listings) in KALAITSIDIS/gnk-crm.
  */
 
 const CRM = process.env.CRM_API_URL ?? "https://gnk-crm.vercel.app";
@@ -19,12 +20,24 @@ export const FEED_REVALIDATE = 60;
 /** A language-keyed string. Phase 1 renders English; el/ru arrive with the site's own translation. */
 export type Multilang = { en?: string | null; el?: string | null; ru?: string | null } | null;
 
+/**
+ * One photograph as the feed sends it: exactly {thumb, card, full, alt,
+ * watermarked}.
+ *
+ * THE COVER IS ELEMENT 0. public_listings() orders `is_cover desc, sort_order,
+ * created_at` (gnk-crm supabase/migrations/0085_adviser_view.sql) and carries
+ * NO flag — gnk-crm RLS test 49 pins both halves (the cover leads even with a
+ * later sort_order; exactly five keys), and it is the test that catches the
+ * feed changing. This interface declared `is_cover` from the site's first
+ * commit; the feed never sent it, and three lookups were right by accident.
+ * CRM-side shape: lib/services/public-listings.ts FeedImage.
+ */
 export interface ListingImage {
   card: string | null;
   thumb: string | null;
   full?: string | null;
   alt?: Multilang;
-  is_cover?: boolean;
+  watermarked?: boolean;
 }
 
 /** One row of `public_listings()`. Every field is nullable — the feed is honest about gaps. */

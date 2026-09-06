@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Listing } from "@/lib/crm";
 import {
   constructionLabel,
+  coverImage,
   deliveryLabel,
   floorLabel,
   isContainer,
@@ -10,6 +11,7 @@ import {
   pricePerSqm,
   storeysLabel,
   vatLabel,
+  yearBuiltLabel,
 } from "./format";
 
 /**
@@ -131,6 +133,76 @@ describe("a completed resale states nothing about being built", () => {
     // "2 of 2" read as a second-floor apartment under an H1 saying "villa".
     expect(floorLabel(villa)).toBeNull();
     expect(storeysLabel(villa)).toBe("2");
+  });
+});
+
+describe("a unit of a development is whatever its TYPE says it is", () => {
+  // In the CRM kind = "unit" means "a child of a project" and nothing more —
+  // it generates villa units on purpose (generateVillaUnits writes
+  // floor_number null, "they do not stack"). The site read kind = "unit" as
+  // "occupies a floor of a building", so a villa in a development whose Floor
+  // and Total floors were typed the way PAF0001's were (2 and 2) would have
+  // published "Floor 2 of 2" — the sentence floorLabel exists to stop.
+  it("gives a villa unit its storeys, never a floor position", () => {
+    const villaUnit = { ...villa, reference: "PAF0002-V01", kind: "unit" } as Listing;
+    expect(floorLabel(villaUnit)).toBeNull();
+    expect(storeysLabel(villaUnit)).toBe("2");
+  });
+
+  it("still gives an apartment — unit or not — its position and no storey count", () => {
+    // The stacked case, which had no fixture at all.
+    const flat = {
+      ...villa,
+      reference: "PAF0010",
+      property_type: "apartment",
+      floor_number: 3,
+      total_floors: 5,
+    } as Listing;
+    expect(floorLabel(flat)).toBe("3 of 5");
+    expect(storeysLabel(flat)).toBeNull();
+    expect(floorLabel({ ...flat, kind: "unit" } as Listing)).toBe("3 of 5");
+  });
+});
+
+describe("year built is a fact about one building", () => {
+  it("is withheld on a development, whose year the CRM never connects to its units", () => {
+    // The fixture's year is null, as PAF0002's is — so set one to prove the
+    // gate and not the gap.
+    expect(yearBuiltLabel({ ...development, year_built: 2020 } as Listing)).toBeNull();
+    expect(yearBuiltLabel({ ...development, kind: "phase", year_built: 2020 } as Listing)).toBeNull();
+  });
+
+  it("renders for a dwelling", () => {
+    expect(yearBuiltLabel(villa)).toBe("2007");
+    expect(yearBuiltLabel({ ...villa, year_built: null } as Listing)).toBeNull();
+  });
+});
+
+describe("the cover photograph is the first one the feed sends", () => {
+  /* The feed's images carry NO cover flag — exactly {alt, card, full, thumb,
+     watermarked} — and the CRM puts the cover FIRST (public_listings orders
+     is_cover desc, sort_order, created_at; gnk-crm RLS test 49 pins both
+     halves). That test catches the feed changing; this one pins that the site
+     reads the contract as written rather than a field it invented — for six
+     days it read `is_cover`, which the feed has never sent, and was right by
+     accident. */
+  const img = (card: string) => ({ card, thumb: null, full: null, alt: null });
+
+  it("reads element 0", () => {
+    const l = { ...villa, images: [img("cover.webp"), img("second.webp")] } as unknown as Listing;
+    expect(coverImage(l)?.card).toBe("cover.webp");
+  });
+
+  it("is not moved by a stray flag on a later image — there is no flag to read", () => {
+    // The exact regression: someone re-adding `.find((i) => i.is_cover)`.
+    const stray = { ...img("second.webp"), is_cover: true };
+    const l = { ...villa, images: [img("cover.webp"), stray] } as unknown as Listing;
+    expect(coverImage(l)?.card).toBe("cover.webp");
+  });
+
+  it("is null with no photographs, so the page can say 'Photography to follow'", () => {
+    expect(coverImage({ ...villa, images: [] } as unknown as Listing)).toBeNull();
+    expect(coverImage({ ...villa, images: null } as unknown as Listing)).toBeNull();
   });
 });
 

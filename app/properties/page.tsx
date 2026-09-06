@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/site-url";
 import { getListings } from "@/lib/crm";
+import { areasWithFeed } from "@/lib/enquiry-fields";
 import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { PropertySearch } from "@/components/property-search";
@@ -82,6 +83,10 @@ export default async function PropertiesPage() {
           </div>
           <EnquiryForm
             variant="buyer"
+            /* The feed is already in hand, and it is the only public source of
+               the CRM's area names: a listing renamed in Settings, or filed
+               under a district the static list never had, is always pickable. */
+            areas={areasWithFeed(feed.ok ? feed.listings : [])}
             heading="What are you looking for?"
             intro="Rough answers are fine — this is a starting point for a conversation, not a search filter."
             cta="Send brief"

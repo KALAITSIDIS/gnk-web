@@ -6,6 +6,7 @@ import { getListing, getListings } from "@/lib/crm";
 import {
   area,
   constructionLabel,
+  coverImage,
   deedLabel,
   deliveryLabel,
   isContainer,
@@ -18,6 +19,7 @@ import {
   text,
   titleOf,
   vatLabel,
+  yearBuiltLabel,
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { ListingContactBar } from "@/components/listing-contact-bar";
@@ -45,7 +47,7 @@ export async function generateMetadata({
   if (!found.ok || !found.listing) return { title: "Property not found" };
   const l = found.listing;
   const description = text(l.short_description) || text(l.public_description).slice(0, 200) || placeLine(l);
-  const cover = (l.images ?? []).find((i) => i.is_cover) ?? (l.images ?? [])[0];
+  const cover = coverImage(l);
   /* A listing is the most-shared page on the site, and it had neither a
      canonical nor an og:url — so a shared link carried the layout's root value
      and a share dialog treated a EUR 450,000 villa as the home page. The
@@ -96,12 +98,15 @@ export default async function PropertyPage({
   if (reference !== l.reference) permanentRedirect(`/properties/${l.reference}`);
 
   const images = l.images ?? [];
-  const cover = images.find((i) => i.is_cover) ?? images[0];
+  // The cover is [0] by the feed's contract — see coverImage. This page used to
+  // hold two inline copies of that lookup, both reading a flag the feed never
+  // sends.
+  const cover = coverImage(l);
   /* Every photograph, not the first few: the card badge counts them all, so
      showing four under a badge reading "6 photos" makes the card lie. The
      hero composition keeps three beside the cover; the remainder follow in
      their own row rather than being dropped. */
-  const rest = images.filter((i) => i !== cover);
+  const rest = images.slice(1);
   const beside = rest.slice(0, 3);
   const below = rest.slice(3);
   /* Two different things that were being conflated. `summary` is the feed's
@@ -136,7 +141,10 @@ export default async function PropertyPage({
     // "N of M" is a position inside a building; a villa has storeys instead.
     ["Floor", floorLabel(l)],
     ["Storeys", storeysLabel(l)],
-    ["Year built", l.year_built ? String(l.year_built) : null],
+    // Withheld on a development for the same reason as bedrooms: the CRM does
+    // not connect a project's year to its units. Energy class stays — the CRM
+    // inherits that one. See yearBuiltLabel.
+    ["Year built", yearBuiltLabel(l)],
     ["Energy class", l.energy_class],
     ["Title deed", deedLabel(l.title_deed_status)],
     // These three are withheld unless the property itself settles them — see
@@ -160,8 +168,8 @@ export default async function PropertyPage({
   const breadcrumbs = listingBreadcrumbs(l);
 
   return (
-    // pb-24 on mobile keeps the fixed bar from covering the end of the page
-    <article className="mx-auto max-w-7xl px-5 py-10 pb-24 sm:px-8 lg:pb-10">
+    <>
+    <article className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -336,7 +344,14 @@ export default async function PropertyPage({
         </div>
       </div>
 
-      <ListingContactBar reference={l.reference} />
     </article>
+    {/* AFTER the article, as a sibling inside <main>: position: sticky then
+        rides the viewport bottom only while the listing is on screen, and
+        scrolls away with it before the footer arrives — no other element has
+        to know this bar's height. It used to sit inside the article as
+        position: fixed, with a hand-copied pb-24 guarding the wrong end of the
+        page, and hid the footer's last line on every phone. */}
+    <ListingContactBar reference={l.reference} />
+    </>
   );
 }

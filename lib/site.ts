@@ -19,6 +19,13 @@
  * possible host for a brand identity that does not exist yet". Replace it the
  * day one does, and nothing else needs to change.
  */
+/* The firm's location in parts, so the footer's display string and the
+   organisation JSON-LD (lib/jsonld.ts) derive from ONE source. The JSON-LD
+   used to carry its own literals beside a comment saying it emitted no
+   address at all. */
+const locality = "Paphos";
+const country = { name: "Cyprus", code: "CY" } as const;
+
 export const site = {
   name: "GN Kalaitsidis Capital",
   shortName: "Kalaitsidis Capital",
@@ -32,7 +39,9 @@ export const site = {
     phone: "+357 94 000015",
     phoneHref: "tel:+35794000015",
     whatsappHref: "https://wa.me/35794000015",
-    city: "Paphos, Cyprus",
+    locality,
+    countryCode: country.code,
+    city: `${locality}, ${country.name}`,
     /** TODO: the street address, once confirmed. The footer omits it until then. */
     street: null as string | null,
     hours: "Monday to Friday, 09:00–18:00",

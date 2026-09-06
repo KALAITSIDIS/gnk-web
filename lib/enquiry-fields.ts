@@ -1,18 +1,25 @@
 /**
- * The vocabulary a seller's enquiry is written in, taken verbatim from the CRM.
+ * The vocabulary a seller's or buyer's enquiry is written in.
  *
- * WHY IT IS COPIED RATHER THAN INVENTED. An enquiry that arrives in the desk's
- * own words is one nobody has to re-key: `property_type`, `title_deed_status`,
- * `covered_area_sqm` and the area names are the CRM's, so turning a lead into a
- * property is transcription rather than translation. Free text here would mean
- * somebody typing "Pegia" and somebody else typing "Peyia".
+ * WHY THE LISTS EXIST. An enquiry that arrives in the desk's own words is one
+ * nobody has to re-key: a picker gives the lead one consistent spelling
+ * ("Peyia", never "Pegia") and a `property_type` the CRM already knows.
+ * Everything here reaches the CRM as TEXT inside the enquiry message — gnk-crm
+ * 0084's door takes no structured fields and parses nothing — so an unknown
+ * value costs the desk a moment at filing, never the enquiry.
  *
- * These lists WILL drift from the CRM eventually — the site holds no
- * credentials and cannot read the enum. That is a deliberate trade: a stale
- * option renders a slightly wrong label on a form, whereas a live connection
- * would mean giving a public marketing site a database reach it has no business
- * having. If a type or an area is added in the CRM, add it here too.
- * Verified against the CRM 2026-09-04.
+ * WHAT BINDS THEM. The site holds no credentials and cannot read the CRM's
+ * enum, so PROPERTY_TYPES is a PINNED COPY: enquiry-fields.test.ts holds the
+ * CRM's list with the commit it was copied from and fails on any drift between
+ * the two — re-pin there when the CRM's list changes. AREAS is not a copy of
+ * anything: the CRM's areas are operator-editable (Settings → Locations;
+ * migration 0003 only seeds a starter set), so this is the firm's marketing
+ * coverage, and areasWithFeed() adds whatever the feed is publishing with, so
+ * the buyer picker can never lack an area a live listing carries.
+ *
+ * (This header used to say "taken verbatim from the CRM ... Verified against
+ * the CRM 2026-09-04". It was not: "hotel" had been in the CRM's list since
+ * July and was never here. A date in prose cannot fail; the test can.)
  */
 
 export const PROPERTY_TYPES = [
@@ -24,6 +31,7 @@ export const PROPERTY_TYPES = [
   "shop",
   "office",
   "building",
+  "hotel",
   "warehouse",
   "mixed_use",
   "other",
@@ -50,6 +58,35 @@ export const AREAS: Record<string, string[]> = {
   ],
   Limassol: ["Agios Athanasios", "Agios Tychonas", "City Centre / Molos", "Germasogeia"],
 };
+
+/**
+ * AREAS, plus every district/area pair the feed is currently publishing with.
+ *
+ * The one page that mounts the buyer picker already fetches the feed, and the
+ * feed is the only public source of the CRM's area names — so a listing whose
+ * area was renamed in Settings, or filed under a district this file never
+ * listed, is always pickable there. AREAS itself is untouched: it is the
+ * seller's list and the fallback when the feed is down.
+ */
+export function areasWithFeed(
+  listings: readonly {
+    district?: { en?: string | null } | null;
+    area?: { en?: string | null } | null;
+  }[],
+): Record<string, string[]> {
+  const out: Record<string, string[]> = Object.fromEntries(
+    Object.entries(AREAS).map(([d, list]) => [d, [...list]]),
+  );
+  for (const l of listings) {
+    const district = l.district?.en?.trim();
+    const area = l.area?.en?.trim();
+    if (!district || !area) continue;
+    const list = (out[district] ??= []);
+    if (!list.includes(area)) list.push(area);
+  }
+  for (const list of Object.values(out)) list.sort((a, b) => a.localeCompare(b));
+  return out;
+}
 
 export const TIMINGS = [
   { value: "now", label: "Ready to sell now" },
