@@ -96,9 +96,12 @@ export function PropertySearch({
      as a result count would. The bar sizes itself to what it contains. */
   const controls =
     1 + (types.length > 1 ? 1 : 0) + (bedOptions.length > 1 ? 1 : 0) + (priceSteps.length > 0 ? 1 : 0);
+  /* Five tracks for four controls, because the text input spans two: on a
+     four-track grid the fourth control wrapped onto a second row by itself
+     (live-ui-3, measured 2026-09-06). */
   const barCols =
     controls >= 4
-      ? "sm:grid-cols-2 lg:grid-cols-4"
+      ? "sm:grid-cols-2 lg:grid-cols-5"
       : controls === 3
         ? "sm:grid-cols-3"
         : controls === 2

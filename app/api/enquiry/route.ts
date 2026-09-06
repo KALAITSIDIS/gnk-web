@@ -181,6 +181,15 @@ export async function POST(request: Request) {
   );
 
   if (!result.ok) {
+    // The CRM's 429 is about the VISITOR — they, specifically, have sent too
+    // many — so it goes through as a 429 with the CRM's Retry-After, not as
+    // a 502 that tells them the site is broken. Not logged as a refusal: it
+    // is the rate limit working, and the CRM already counted it.
+    if (result.status === 429) {
+      const res = fail(result.error, 429);
+      res.headers.set("Retry-After", result.retryAfter ?? "900");
+      return res;
+    }
     // A refused enquiry is a lost client. It must never fail silently: without
     // this line the firm has no way of learning an enquiry was turned away.
     console.error("[enquiry] refused:", result.error);

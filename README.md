@@ -64,6 +64,19 @@ site through the feed, so the desk publishes a property without a deploy.
 Only the chrome — the marketing copy, the layout, the pages that are not
 listings — lives here.
 
+## How fresh the site is
+
+Three caches sit between a change in the CRM and a visitor, and each holds
+for 60 seconds: the CRM's edge keeps a feed body for `max-age=60`
+(`/api/public/listings`), this site's data cache re-reads the feed after
+`FEED_REVALIDATE` seconds (`lib/crm.ts`), and each page is ISR with
+`revalidate = 60`. Under steady traffic a change therefore shows within
+about three minutes. On a quiet site the first visitor after a lull is
+served the last render, however old — 5 h 20 min was observed on
+2026-09-06 — and their visit triggers the rebuild the next visitor sees.
+`lib/freshness.test.ts` holds the numbers in this paragraph to the constants;
+the CRM's `max-age` is pinned by its own route test.
+
 ## Related
 
 - CRM: `KALAITSIDIS/gnk-crm` — the feed and the enquiry door

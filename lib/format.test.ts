@@ -9,6 +9,7 @@ import {
   constructionLabel,
   coverImage,
   CURRENCY,
+  heroImage,
   deliveryLabel,
   floorLabel,
   isContainer,
@@ -351,5 +352,27 @@ describe("the currency has one home", () => {
       }
     }
     expect(offenders, "a second copy of the currency — read CURRENCY instead").toEqual([]);
+  });
+});
+
+describe("the hero is the largest rendition, not the grid tile", () => {
+  const withImages = (images: unknown) => ({ ...villa, images }) as Listing;
+
+  it("prefers full, the rendition sized for a hero and an OG card", () => {
+    expect(heroImage(withImages([{ thumb: "t", card: "c", full: "f" }]))).toBe("f");
+  });
+
+  it("falls back to card for a feed that carries no full rendition", () => {
+    expect(heroImage(withImages([{ thumb: "t", card: "c", full: null }]))).toBe("c");
+    expect(heroImage(withImages([{ thumb: "t", card: "c" }]))).toBe("c");
+  });
+
+  it("is null with no photographs, so the page can say 'Photography to follow'", () => {
+    expect(heroImage(withImages([]))).toBeNull();
+    expect(heroImage(withImages(null))).toBeNull();
+  });
+
+  it("reads the COVER — element 0 — not the largest image anywhere", () => {
+    expect(heroImage(withImages([{ card: "c1", full: null }, { card: "c2", full: "f2" }]))).toBe("c1");
   });
 });

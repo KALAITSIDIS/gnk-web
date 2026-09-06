@@ -1,4 +1,5 @@
 import { site } from "@/lib/site";
+import { whatsappHref } from "@/lib/whatsapp";
 
 /**
  * A way to act, on the page where someone decides to.
@@ -28,10 +29,15 @@ import { site } from "@/lib/site";
  * article, which guarded the enquiry form and not the footer, and the footer's
  * last line was hidden on every phone.) listing-contact-bar.test.ts pins both.
  */
-export function ListingContactBar({ reference }: { reference: string }) {
-  const wa = `${site.contact.whatsappHref}?text=${encodeURIComponent(
-    `Hello — I am interested in ${reference}.`,
-  )}`;
+export function ListingContactBar({
+  reference,
+  listingUrl,
+}: {
+  reference: string;
+  /** The page's absolute address, so the message the firm receives opens the listing. */
+  listingUrl?: string;
+}) {
+  const wa = whatsappHref(reference, listingUrl);
   const cell =
     "flex flex-1 items-center justify-center gap-2 py-3.5 text-sm font-medium";
 
