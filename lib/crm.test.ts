@@ -216,6 +216,19 @@ describe("handing an enquiry to the CRM", () => {
     }
   });
 
+  it("carries a 429's status and Retry-After, so the route can pass them to the visitor", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("", { status: 429, headers: { "retry-after": "900" } }),
+    );
+    const r = await submitEnquiry({ name: "A Buyer" });
+    expect(r).toEqual({
+      ok: false,
+      error: "Too many enquiries from this address. Please try again shortly.",
+      status: 429,
+      retryAfter: "900",
+    });
+  });
+
   it("never hands the CRM's validator wording to whoever filled the form", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

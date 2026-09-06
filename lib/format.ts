@@ -210,6 +210,20 @@ export function coverImage(l: Listing): ListingImage | null {
   return (l.images ?? [])[0] ?? null;
 }
 
+/**
+ * The largest rendition of the cover, for the two places that show it big:
+ * the hero and the Open Graph image. Both used `card` — the rendition sized
+ * for a grid tile — because that is what the card used, so a listing page's
+ * hero was a card blown up. `full` is what those two surfaces want; `card`
+ * is the fallback for a feed served before 0073 carried it. (Production
+ * `full` is 1024 px until the firm uploads larger originals; that is the
+ * ceiling of the upload, not of this function.)
+ */
+export function heroImage(l: Listing): string | null {
+  const cover = coverImage(l);
+  return cover?.full ?? cover?.card ?? null;
+}
+
 export function titleOf(l: Listing): string {
   return text(l.title) || placeLine(l);
 }

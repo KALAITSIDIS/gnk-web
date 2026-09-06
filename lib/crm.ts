@@ -231,7 +231,11 @@ export interface EnquiryInput {
   website?: string;
 }
 
-export type EnquiryResult = { ok: true } | { ok: false; error: string };
+export type EnquiryResult =
+  | { ok: true }
+  /** `status` and `retryAfter` are set only for a 429: the one refusal that is
+   *  about the VISITOR rather than the site, and that the route passes through. */
+  | { ok: false; error: string; status?: number; retryAfter?: string | null };
 
 /**
  * Hand an enquiry to the CRM, which decides whether it becomes a lead.
@@ -279,7 +283,12 @@ export async function submitEnquiry(
     });
     if (res.status === 202) return { ok: true };
     if (res.status === 429) {
-      return { ok: false, error: "Too many enquiries from this address. Please try again shortly." };
+      return {
+        ok: false,
+        error: "Too many enquiries from this address. Please try again shortly.",
+        status: 429,
+        retryAfter: res.headers.get("retry-after"),
+      };
     }
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     /* The CRM's own words are for us, not for the person filling the form: a

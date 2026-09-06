@@ -12,6 +12,7 @@ import {
   deliveryLabel,
   isContainer,
   floorLabel,
+  heroImage,
   label,
   placeLine,
   priceLabel,
@@ -26,7 +27,7 @@ import { EnquiryForm } from "@/components/enquiry-form";
 import { ListingContactBar } from "@/components/listing-contact-bar";
 import { JsonLd } from "@/components/json-ld";
 import { listingBreadcrumbs, listingJsonLd } from "@/lib/jsonld";
-import { OG_BASE } from "@/lib/site-url";
+import { absolute, OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -49,7 +50,6 @@ export async function generateMetadata({
   if (!found.ok || !found.listing) return { title: "Property not found" };
   const l = found.listing;
   const description = text(l.short_description) || text(l.public_description).slice(0, 200) || placeLine(l);
-  const cover = coverImage(l);
   /* A listing is the most-shared page on the site, and it had neither a
      canonical nor an og:url — so a shared link carried the layout's root value
      and a share dialog treated a EUR 450,000 villa as the home page. The
@@ -69,8 +69,9 @@ export async function generateMetadata({
       description,
       url: path,
       // The photograph beats the generated card — on a listing the image IS the
-      // point. Falls back to the card when a listing has no photograph yet.
-      images: cover?.card ? [cover.card] : OG_BASE.images,
+      // point: the largest rendition (heroImage), not the grid tile. Falls back
+      // to the generated card when a listing has no photograph yet.
+      images: heroImage(l) ? [heroImage(l)!] : OG_BASE.images,
     },
   };
 }
@@ -104,6 +105,11 @@ export default async function PropertyPage({
   // hold two inline copies of that lookup, both reading a flag the feed never
   // sends.
   const cover = coverImage(l);
+  /* The hero shows the LARGEST rendition; the card and the thumbnails keep
+     theirs. One function decides, for this and the OG image. */
+  const hero = heroImage(l);
+  /* Absolute, once, for both contact routes' WhatsApp text. */
+  const listingUrl = absolute(`/properties/${l.reference}`);
   /* Every photograph, not the first few: the card badge counts them all, so
      showing four under a badge reading "6 photos" makes the card lie. The
      hero composition keeps three beside the cover; the remainder follow in
@@ -203,9 +209,9 @@ export default async function PropertyPage({
 
       <div className="mt-8 grid gap-3 md:grid-cols-[2fr_1fr]">
         <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
-          {cover?.card ? (
+          {hero && cover ? (
             <Image
-              src={cover.card}
+              src={hero}
               alt={text(cover.alt) || titleOf(l)}
               fill
               priority
@@ -337,6 +343,7 @@ export default async function PropertyPage({
         <div id="enquire" className="scroll-mt-6 lg:sticky lg:top-8">
           <EnquiryForm
             reference={l.reference}
+            listingUrl={listingUrl}
             heading="Ask about this property"
             intro={`Arrange a viewing, ask for the full cost model, or get our written view on the price. You will hear back from one of us at ${site.shortName}.`}
             cta="Send enquiry"
@@ -351,7 +358,7 @@ export default async function PropertyPage({
         to know this bar's height. It used to sit inside the article as
         position: fixed, with a hand-copied pb-24 guarding the wrong end of the
         page, and hid the footer's last line on every phone. */}
-    <ListingContactBar reference={l.reference} />
+    <ListingContactBar reference={l.reference} listingUrl={listingUrl} />
     </>
   );
 }

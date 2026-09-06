@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { site } from "@/lib/site";
+import { whatsappHref } from "@/lib/whatsapp";
 import { label } from "@/lib/format";
 import {
   AREAS,
@@ -40,8 +41,11 @@ export function EnquiryForm({
      coverage; the properties page passes areasWithFeed(...) so a buyer can
      always pick the area a live listing is filed under. */
   areas = AREAS,
+  /* The listing page's absolute address, for the WhatsApp text. */
+  listingUrl,
 }: {
   reference?: string;
+  listingUrl?: string;
   heading?: string;
   intro?: string;
   cta?: string;
@@ -51,10 +55,9 @@ export function EnquiryForm({
   const seller = variant === "seller";
   const buyer = variant === "buyer";
   /* Prefilled, because the point of the reference is that the buyer never has
-     to describe which property they mean. */
-  const waHref = reference
-    ? `${site.contact.whatsappHref}?text=${encodeURIComponent(`Hello — I am interested in ${reference}.`)}`
-    : site.contact.whatsappHref;
+     to describe which property they mean — composed in lib/whatsapp.ts, the
+     same place the mobile contact bar reads. */
+  const waHref = whatsappHref(reference, listingUrl);
 
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
