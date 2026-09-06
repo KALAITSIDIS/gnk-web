@@ -215,10 +215,32 @@ export type ListingResult = { ok: true; listing: Listing | null } | { ok: false 
  * still for sale and a 404 tells search engines to forget it exists.
  */
 export async function getListing(reference: string): Promise<ListingResult> {
-  const feed = await getListings();
-  if (!feed.ok) return { ok: false };
+  // One row, asked for by reference (gnk-crm 0088), not the whole book read
+  // and searched: every view of a listing page used to fetch every published
+  // listing, page by page. The CRM matches case-insensitively and answers the
+  // canonical spelling, which is what the page redirects to. A CRM that does
+  // not know the parameter yet ignores it and answers the feed's first page,
+  // so the find() below is still the last word.
   const wanted = reference.toLowerCase();
-  return { ok: true, listing: feed.listings.find((l) => l.reference.toLowerCase() === wanted) ?? null };
+  try {
+    const res = await fetch(
+      `${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&reference=${encodeURIComponent(reference)}`,
+      { next: { revalidate: FEED_REVALIDATE }, signal: AbortSignal.timeout(FEED_TIMEOUT_MS) },
+    );
+    if (!res.ok) {
+      console.error(`[crm] listing lookup responded ${res.status} for ${reference}`);
+      return { ok: false };
+    }
+    const body = (await res.json()) as FeedResponse;
+    if (!Array.isArray(body.listings)) {
+      console.error("[crm] listing lookup body had no listings array");
+      return { ok: false };
+    }
+    return { ok: true, listing: body.listings.find((l) => l.reference.toLowerCase() === wanted) ?? null };
+  } catch (err) {
+    console.error("[crm] listing lookup failed:", err);
+    return { ok: false };
+  }
 }
 
 export interface EnquiryInput {
