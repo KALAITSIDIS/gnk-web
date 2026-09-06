@@ -1,5 +1,15 @@
 import type { Listing } from "@/lib/crm";
-import { isContainer, placeLine, text, titleOf } from "@/lib/format";
+import type { PROPERTY_TYPES } from "@/lib/enquiry-fields";
+import {
+  bedroomsOf,
+  CURRENCY,
+  isContainer,
+  placeLine,
+  pricing,
+  text,
+  titleOf,
+  yearBuiltLabel,
+} from "@/lib/format";
 import { site } from "@/lib/site";
 import { absolute, SITE_URL } from "@/lib/site-url";
 
@@ -47,6 +57,93 @@ export function organizationJsonLd(firm: typeof site = site) {
   };
 }
 
+type PropertyType = (typeof PROPERTY_TYPES)[number];
+
+/**
+ * What the thing on the page IS, in schema.org's terms, from the CRM's
+ * property_type and nothing else.
+ *
+ * Typed against the CRM's enum (lib/enquiry-fields.ts pins the list to the
+ * CRM's), so a new type there is a compile error here rather than a silent
+ * default. NEVER `House` by default: a plot, a shop and an hotel are not
+ * houses, and a dwelling type schema.org does not distinguish is still a
+ * dwelling — `Accommodation` says that and no more. Anything the enum does
+ * not know is a `Place`, which asserts nothing about what stands on it.
+ */
+const MAIN_ENTITY_TYPE: Record<PropertyType, string> = {
+  apartment: "Apartment",
+  villa: "SingleFamilyResidence",
+  townhouse: "House",
+  house: "House",
+  land: "Place",
+  shop: "Place",
+  office: "Place",
+  building: "Place",
+  hotel: "Place",
+  warehouse: "Place",
+  mixed_use: "Place",
+  other: "Place",
+};
+
+function mainEntityType(l: Listing): string {
+  // A development is not one dwelling of any type; it is a place with units.
+  if (isContainer(l)) return "Place";
+  return (MAIN_ENTITY_TYPE as Record<string, string>)[l.property_type] ?? "Place";
+}
+
+const IN_STOCK = "https://schema.org/InStock";
+const SELL = "http://purl.org/goodrelations/v1#Sell";
+const LEASE_OUT = "http://purl.org/goodrelations/v1#LeaseOut";
+
+/**
+ * The offer(s), from the ONE pricing every surface reads (lib/format.ts).
+ *
+ * A sale is an Offer to Sell with a firm price — or, on a development, a
+ * PriceSpecification whose minPrice says "from" the way the card does, because
+ * `price` is a figure every consumer treats as transactable and a development's
+ * asking_price is the lowest of its units. A rental is an Offer to LeaseOut
+ * priced per MONTH through a UnitPriceSpecification: an Offer with `price:
+ * 1500` would be read as €1,500 outright by everything that reads it. A
+ * listing offered both ways carries both offers.
+ */
+function offersFor(l: Listing): Record<string, unknown>[] {
+  const p = pricing(l);
+  const offers: Record<string, unknown>[] = [];
+  if (p.sale) {
+    offers.push({
+      "@type": "Offer",
+      businessFunction: SELL,
+      priceCurrency: CURRENCY,
+      availability: IN_STOCK,
+      ...(p.from
+        ? {
+            priceSpecification: {
+              "@type": "PriceSpecification",
+              minPrice: p.sale,
+              priceCurrency: CURRENCY,
+            },
+          }
+        : { price: p.sale }),
+    });
+  }
+  if (p.rent) {
+    offers.push({
+      "@type": "Offer",
+      businessFunction: LEASE_OUT,
+      priceCurrency: CURRENCY,
+      availability: IN_STOCK,
+      priceSpecification: {
+        "@type": "UnitPriceSpecification",
+        price: p.rent,
+        priceCurrency: CURRENCY,
+        unitCode: "MON",
+        referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
+      },
+    });
+  }
+  return offers;
+}
+
 /**
  * The machine-readable copy of a listing page.
  *
@@ -60,19 +157,42 @@ export function organizationJsonLd(firm: typeof site = site) {
  *
  * That is this project's recurring failure verbatim, and the second time on
  * this page (54d9490 was the first): a claim removed from the page and left in
- * the metadata. The
- * rule now has one home. If a fact is withheld from the table because a
- * container does not own it, it is withheld here too — see isContainer in
- * lib/format.ts, which is the one definition of what a container is.
+ * the metadata. The rule now has one home. If a fact is withheld from the table
+ * because a container does not own it, it is withheld here too — see
+ * isContainer in lib/format.ts, which is the one definition of what a container
+ * is; the price is `pricing` and the bedrooms `bedroomsOf`, the same functions
+ * the table reads.
+ *
+ * SHAPE (2026-09-06). The page is a RealEstateListing; the thing it is about is
+ * its `mainEntity`, typed from property_type, and the dwelling facts — address,
+ * floor size, bedrooms, bathrooms, year built — live on that entity, because
+ * they are facts about the dwelling and not about the web page. The offers
+ * stay on the listing. A studio's `numberOfBedrooms` is 0, not absent.
  */
-export function listingJsonLd(l: Listing) {
+type Offer = Record<string, unknown>;
+
+export interface ListingJsonLd {
+  "@context": string;
+  "@type": "RealEstateListing";
+  name: string;
+  description: string;
+  url: string;
+  image: (string | null)[];
+  datePosted?: string;
+  /** One offer is an object, two are an array — the shape consumers expect. Absent when unpriced. */
+  offers?: Offer | Offer[];
+  mainEntity: Record<string, unknown>;
+}
+
+export function listingJsonLd(l: Listing): ListingJsonLd {
   /* The same gate the visible facts table uses, from the same predicate. */
   const unitFacts = !isContainer(l);
-  const currency = l.currency ?? "EUR";
   const summary = text(l.short_description);
   const body = text(l.public_description);
+  const offers = offersFor(l);
+  const bedrooms = bedroomsOf(l);
 
-  return {
+  const ld: ListingJsonLd = {
     "@context": "https://schema.org",
     "@type": "RealEstateListing",
     name: titleOf(l),
@@ -81,40 +201,27 @@ export function listingJsonLd(l: Listing) {
     // every consumer that reads it away from this page.
     url: absolute(`/properties/${l.reference}`),
     image: (l.images ?? []).map((i) => i.card).filter(Boolean),
-    ...(l.asking_price
-      ? {
-          offers: {
-            "@type": "Offer",
-            priceCurrency: currency,
-            availability: "https://schema.org/InStock",
-            ...(unitFacts
-              ? { price: l.asking_price }
-              : {
-                  // A development's asking_price is the lowest of its units,
-                  // not a price anything is for sale at. schema.org has a way
-                  // to say exactly that, and `price` does not mean it — a firm
-                  // 800,000 on a project whose villas start there is a figure
-                  // no buyer can transact on.
-                  priceSpecification: {
-                    "@type": "PriceSpecification",
-                    minPrice: l.asking_price,
-                    priceCurrency: currency,
-                  },
-                }),
-          },
-        }
-      : {}),
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: text(l.area) || text(l.district),
-      addressRegion: text(l.district),
-      addressCountry: "CY",
+    mainEntity: {
+      "@type": mainEntityType(l),
+      name: titleOf(l),
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: text(l.area) || text(l.district),
+        addressRegion: text(l.district),
+        addressCountry: "CY",
+      },
+      ...(unitFacts && l.covered_area_sqm
+        ? { floorSize: { "@type": "QuantitativeValue", value: l.covered_area_sqm, unitCode: "MTK" } }
+        : {}),
+      ...(bedrooms !== null ? { numberOfBedrooms: bedrooms } : {}),
+      ...(unitFacts && l.bathrooms ? { numberOfBathroomsTotal: l.bathrooms } : {}),
+      ...(yearBuiltLabel(l) ? { yearBuilt: l.year_built } : {}),
     },
-    ...(unitFacts && l.covered_area_sqm
-      ? { floorSize: { "@type": "QuantitativeValue", value: l.covered_area_sqm, unitCode: "MTK" } }
-      : {}),
-    ...(unitFacts && l.bedrooms ? { numberOfBedrooms: l.bedrooms } : {}),
   };
+  if (l.published_at) ld.datePosted = l.published_at;
+  if (offers.length === 1) ld.offers = offers[0]!;
+  else if (offers.length > 1) ld.offers = offers;
+  return ld;
 }
 
 /** Where this page sits, so a search result shows the path rather than a bare URL. */

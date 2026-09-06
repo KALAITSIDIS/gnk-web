@@ -6,9 +6,18 @@ export function text(m: Multilang | undefined, fallback = ""): string {
   return m.en?.trim() || m.el?.trim() || m.ru?.trim() || fallback;
 }
 
+/**
+ * The feed's one currency. gnk-crm 0087 constrains `properties.currency` to
+ * 'EUR' (`properties_currency_eur`), so the site holds ONE constant and never
+ * reads the per-row column: two sources for a fact the database already fixes
+ * would let a stray row be formatted as euros and labelled as something else.
+ * lib/format.test.ts holds this to be the only "EUR" literal in shipped code.
+ */
+export const CURRENCY = "EUR";
+
 const EUR = new Intl.NumberFormat("en-IE", {
   style: "currency",
-  currency: "EUR",
+  currency: CURRENCY,
   maximumFractionDigits: 0,
 });
 
@@ -44,18 +53,56 @@ export function isContainer(l: Listing): boolean {
 }
 
 /**
+ * What a listing costs, as ONE fact read by every surface — the label, the
+ * €/m², the search ladder and the structured data.
+ *
+ * Until 2026-09-06 each of those read `transaction_type` and the two price
+ * columns for itself: four copies of one rule, and a `sale_or_rent` listing —
+ * an enum value the feed can carry today — would have rendered as a sale
+ * everywhere and never mentioned its rent. `sale` is what it is for sale at
+ * outright and `rent` what it lets for per month; each is present only when
+ * the transaction includes that side AND a positive figure exists. `from`
+ * says the sale figure is the lowest of a development's units rather than a
+ * price anything is for sale at (isContainer).
+ */
+export interface Pricing {
+  sale: number | null;
+  rent: number | null;
+  from: boolean;
+  forSale: boolean;
+  toLet: boolean;
+}
+
+/** A price is a positive finite number; zero, a negative or a blank is not one. */
+function positive(n: number | null | undefined): number | null {
+  if (n === null || n === undefined) return null;
+  const v = Number(n);
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+export function pricing(l: Listing): Pricing {
+  const forSale = l.transaction_type === "sale" || l.transaction_type === "sale_or_rent";
+  const toLet = l.transaction_type === "rent" || l.transaction_type === "sale_or_rent";
+  return {
+    sale: forSale ? positive(l.asking_price) : null,
+    rent: toLet ? positive(l.rent_price_month) : null,
+    from: isContainer(l),
+    forSale,
+    toLet,
+  };
+}
+
+/**
  * What a listing costs, said the way its transaction works. A rental priced
- * per month and a sale priced outright must never render identically.
+ * per month and a sale priced outright must never render identically, and a
+ * listing offered both ways says both.
  */
 export function priceLabel(l: Listing): string {
-  if (l.transaction_type === "rent") {
-    const rent = money(l.rent_price_month);
-    return rent ? `${rent} / month` : "Price on application";
-  }
-  const price = money(l.asking_price);
-  if (!price) return "Price on application";
+  const p = pricing(l);
   // "from", because the units carry the real prices and this is the lowest.
-  return isContainer(l) ? `from ${price}` : price;
+  const sale = p.sale ? (p.from ? `from ${money(p.sale)}` : money(p.sale)) : null;
+  const rent = p.rent ? `${money(p.rent)} / month` : null;
+  return [sale, rent].filter(Boolean).join(" · ") || "Price on application";
 }
 
 export function area(n: number | null | undefined): string | null {
@@ -66,12 +113,35 @@ export function area(n: number | null | undefined): string | null {
 /** €/m² — the number an advisory firm is expected to have already worked out. */
 export function pricePerSqm(l: Listing): string | null {
   // A container's "from" price over a container's own covered area is a ratio
-  // between two unrelated numbers. See isContainer above.
-  if (isContainer(l)) return null;
-  const price = l.transaction_type === "rent" ? null : l.asking_price;
+  // between two unrelated numbers. See isContainer above. A rent is a month,
+  // not a price, so it has no €/m² either — only the sale side does.
+  const { sale, from } = pricing(l);
   const size = l.covered_area_sqm;
-  if (!price || !size || Number(size) <= 0) return null;
-  return `${EUR.format(Math.round(Number(price) / Number(size)))} / m²`;
+  if (from || !sale || !size || Number(size) <= 0) return null;
+  return `${EUR.format(Math.round(sale / Number(size)))} / m²`;
+}
+
+/**
+ * Bedrooms as a fact about ONE dwelling, read by the card, the facts table,
+ * the search bar and the structured data.
+ *
+ * null on a development — the units carry them (isContainer) — and null when
+ * unknown. ZERO IS KEPT: a studio is an apartment with no separate bedroom,
+ * recorded in the CRM as bedrooms 0, and every consumer used to test
+ * `if (l.bedrooms)` — so a studio would have published no bedroom count at
+ * all, dropping the one fact that defines it.
+ */
+export function bedroomsOf(l: Listing): number | null {
+  if (isContainer(l)) return null;
+  const n = l.bedrooms;
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/** The facts-table cell: "Studio" for none, the count otherwise, nothing when unknown. */
+export function bedroomsLabel(l: Listing): string | null {
+  const n = bedroomsOf(l);
+  if (n === null) return null;
+  return n === 0 ? "Studio" : String(n);
 }
 
 const WORDS: Record<string, string> = {
