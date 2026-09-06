@@ -5,6 +5,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { getListing, getListings } from "@/lib/crm";
 import {
   area,
+  bedroomsLabel,
   constructionLabel,
   coverImage,
   deedLabel,
@@ -136,7 +137,9 @@ export default async function PropertyPage({
     ["Covered area", unitFacts ? area(l.covered_area_sqm) : null],
     ["Plot", unitFacts ? area(l.plot_area_sqm) : null],
     ["Veranda", unitFacts ? area(l.veranda_sqm) : null],
-    ["Bedrooms", unitFacts && l.bedrooms ? String(l.bedrooms) : null],
+    // The one bedrooms rule (bedroomsOf): a container's are withheld there, and
+    // a studio reads "Studio" rather than vanishing on a falsy zero.
+    ["Bedrooms", bedroomsLabel(l)],
     ["Bathrooms", unitFacts && l.bathrooms ? String(l.bathrooms) : null],
     ["Parking", unitFacts && l.parking_spaces ? String(l.parking_spaces) : null],
     // "N of M" is a position inside a building; a villa has storeys instead.

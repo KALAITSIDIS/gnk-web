@@ -1,5 +1,5 @@
 import type { Listing } from "@/lib/crm";
-import { isContainer } from "@/lib/format";
+import { bedroomsOf, isContainer, pricing } from "@/lib/format";
 
 /**
  * The price ladder offered in the search bar.
@@ -50,8 +50,10 @@ export function priceStepsFor(prices: readonly number[]): number[] {
 export function bedroomOptionsFor(listings: readonly Listing[]): number[] {
   const seen = new Set<number>();
   for (const l of listings) {
-    if (isContainer(l)) continue;
-    if (l.bedrooms) seen.add(l.bedrooms);
+    const n = bedroomsOf(l);
+    // A studio's zero is a fact about the studio (bedroomsOf keeps it), but
+    // "0+ bedrooms" is "any bedrooms": it is not an option.
+    if (n !== null && n > 0) seen.add(n);
   }
   return [...seen].sort((a, b) => a - b);
 }
@@ -60,7 +62,7 @@ export function bedroomOptionsFor(listings: readonly Listing[]): number[] {
 export function matchesBedrooms(l: Listing, minBeds: string): boolean {
   if (!minBeds) return true;
   if (isContainer(l)) return false;
-  return (l.bedrooms ?? 0) >= Number(minBeds);
+  return (bedroomsOf(l) ?? 0) >= Number(minBeds);
 }
 
 /**
@@ -79,16 +81,17 @@ export function matchesBedrooms(l: Listing, minBeds: string): boolean {
  * display side of the same rule, and the test pins that the two agree.
  */
 export function salePrice(l: Listing): number | null {
-  if (l.transaction_type === "rent") return null;
-  return l.asking_price ?? null;
+  // Read from the one pricing, not from the columns: a listing for sale OR
+  // rent is on the ladder by its sale figure, as its card says.
+  return pricing(l).sale;
 }
 
 /** Whether a listing satisfies a maximum-price filter; "" means no filter. */
 export function matchesMaxPrice(l: Listing, maxPrice: string): boolean {
   if (!maxPrice) return true;
-  if (l.transaction_type === "rent") return false;
-  const p = salePrice(l);
+  const p = pricing(l);
+  if (!p.forSale) return false;
   // Price on application stays under any ceiling, as it always did: it may
   // well be under it, and the card says "Price on application" honestly.
-  return !p || p <= Number(maxPrice);
+  return !p.sale || p.sale <= Number(maxPrice);
 }

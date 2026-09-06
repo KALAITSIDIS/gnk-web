@@ -136,3 +136,42 @@ describe("a rental's month is not a rung on the sale ladder", () => {
     expect(matchesMaxPrice(sale(null), "500000")).toBe(true);
   });
 });
+
+describe("a studio is a dwelling with no bedroom, not a dwelling with no bedroom count", () => {
+  const studio = {
+    kind: "standalone",
+    property_type: "apartment",
+    transaction_type: "sale",
+    asking_price: 120_000,
+    bedrooms: 0,
+  } as unknown as Listing;
+  const three = { ...studio, bedrooms: 3 } as Listing;
+
+  it("offers no '0+' option, because that is 'any bedrooms'", () => {
+    expect(bedroomOptionsFor([studio, three])).toEqual([3]);
+  });
+
+  it("fails a 1+ filter and passes no filter", () => {
+    expect(matchesBedrooms(studio, "1")).toBe(false);
+    expect(matchesBedrooms(studio, "")).toBe(true);
+  });
+});
+
+describe("a listing for sale or rent", () => {
+  const both = {
+    kind: "standalone",
+    transaction_type: "sale_or_rent",
+    asking_price: 450_000,
+    rent_price_month: 1_500,
+  } as unknown as Listing;
+
+  it("is on the ladder by its sale price, and under a ceiling by it", () => {
+    expect(salePrice(both)).toBe(450_000);
+    expect(matchesMaxPrice(both, "500000")).toBe(true);
+    expect(matchesMaxPrice(both, "400000")).toBe(false);
+  });
+
+  it("agrees with the card, which says both", () => {
+    expect(priceLabel(both)).toBe("€450,000 · €1,500 / month");
+  });
+});

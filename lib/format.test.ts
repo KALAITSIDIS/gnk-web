@@ -1,14 +1,21 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Listing } from "@/lib/crm";
 import {
+  bedroomsLabel,
+  bedroomsOf,
   constructionLabel,
   coverImage,
+  CURRENCY,
   deliveryLabel,
   floorLabel,
   isContainer,
   placeLine,
   priceLabel,
   pricePerSqm,
+  pricing,
   storeysLabel,
   vatLabel,
   yearBuiltLabel,
@@ -247,5 +254,102 @@ describe("land", () => {
     expect(constructionLabel(land)).toBeNull();
     expect(storeysLabel(land)).toBeNull();
     expect(floorLabel(land)).toBeNull();
+  });
+});
+
+describe("one pricing, read by every surface", () => {
+  const rental = {
+    kind: "standalone",
+    property_type: "apartment",
+    transaction_type: "rent",
+    asking_price: null,
+    rent_price_month: 1500,
+    covered_area_sqm: 80,
+  } as unknown as Listing;
+  const both = { ...villa, transaction_type: "sale_or_rent", rent_price_month: 1500 } as Listing;
+
+  it("a sale has a sale figure and no rent", () => {
+    expect(pricing(villa)).toEqual({ sale: 450000, rent: null, from: false, forSale: true, toLet: false });
+  });
+
+  it("a rental has a month and no sale, whatever asking_price says", () => {
+    const stray = { ...rental, asking_price: 999999 } as Listing;
+    expect(pricing(stray)).toEqual({ sale: null, rent: 1500, from: false, forSale: false, toLet: true });
+    expect(priceLabel(stray)).toBe("€1,500 / month");
+  });
+
+  it("sale_or_rent carries both, and the label says both", () => {
+    // An enum value the feed can carry today and no surface knew: it would
+    // have rendered as a sale everywhere and never mentioned its rent.
+    expect(pricing(both)).toMatchObject({ sale: 450000, rent: 1500, forSale: true, toLet: true });
+    expect(priceLabel(both)).toBe("€450,000 · €1,500 / month");
+  });
+
+  it("a development's sale figure is 'from'", () => {
+    expect(pricing(development).from).toBe(true);
+    expect(priceLabel(development)).toBe("from €800,000");
+  });
+
+  it("zero, a negative and a blank are not prices", () => {
+    expect(priceLabel({ ...villa, asking_price: 0 } as Listing)).toBe("Price on application");
+    expect(priceLabel({ ...villa, asking_price: -5 } as Listing)).toBe("Price on application");
+    expect(priceLabel({ ...rental, rent_price_month: null } as Listing)).toBe("Price on application");
+  });
+
+  it("the €/m² is the sale side only, never the month", () => {
+    expect(pricePerSqm(both)).toBe("€2,432 / m²");
+    expect(pricePerSqm(rental)).toBeNull();
+  });
+});
+
+describe("bedrooms are a fact about one dwelling, and zero is a studio", () => {
+  it("keeps a studio's zero, and says the word", () => {
+    const studio = { ...villa, property_type: "apartment", bedrooms: 0 } as Listing;
+    expect(bedroomsOf(studio)).toBe(0);
+    expect(bedroomsLabel(studio)).toBe("Studio");
+  });
+
+  it("withholds a development's count — the units carry them", () => {
+    expect(bedroomsOf(development)).toBeNull();
+    expect(bedroomsLabel(development)).toBeNull();
+  });
+
+  it("renders a dwelling's count", () => {
+    expect(bedroomsOf(villa)).toBe(3);
+    expect(bedroomsLabel(villa)).toBe("3");
+  });
+
+  it("treats a missing or nonsense value as unknown, not as a studio", () => {
+    expect(bedroomsOf({ ...villa, bedrooms: null } as Listing)).toBeNull();
+    expect(bedroomsOf({ ...villa, bedrooms: -1 } as Listing)).toBeNull();
+    expect(bedroomsOf({ ...villa, bedrooms: 2.5 } as Listing)).toBeNull();
+  });
+});
+
+describe("the currency has one home", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const shipped = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) return shipped(full);
+      if (!/\.(ts|tsx)$/.test(name) || /\.test\.tsx?$/.test(name)) return [];
+      return [full];
+    });
+
+  /** Code, not commentary: a comment recalling the currency is not a second copy. */
+  const stripComments = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("is the feed's EUR (gnk-crm 0087 constrains the column), spelled in lib/format.ts and nowhere else", () => {
+    expect(CURRENCY).toBe("EUR");
+    const offenders: string[] = [];
+    for (const dir of ["app", "components", "lib"]) {
+      for (const file of shipped(join(root, dir))) {
+        const rel = relative(root, file).replace(/\\/g, "/");
+        if (rel === "lib/format.ts") continue;
+        if (/"EUR"/.test(stripComments(readFileSync(file, "utf-8")))) offenders.push(rel);
+      }
+    }
+    expect(offenders, "a second copy of the currency — read CURRENCY instead").toEqual([]);
   });
 });
