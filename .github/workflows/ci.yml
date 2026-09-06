@@ -18,6 +18,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Production dependencies only, high and above (the CRM's audit
+      # response of 2026-09-06, Now #8). A red step here is answered with
+      # a plain `npm audit fix`, never `--force`.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Typecheck
         run: npm run typecheck
 
