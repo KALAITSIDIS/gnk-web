@@ -49,13 +49,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const feed = await getListings();
   if (!feed.ok) {
-    // Deliberately NOT a throw: that would fail the build outright if the CRM
-    // happened to be down at deploy time. A sitemap is a hint, so a property
-    // temporarily absent from it is not deindexed — the next revalidation puts
-    // it back. The 404 in the page route was the dangerous half, and that is
-    // fixed there.
-    console.error("[sitemap] feed unavailable — publishing static pages only");
-    return staticEntries;
+    // A THROW, for the same reason the listing page throws (app/properties/
+    // [reference]/page.tsx): a 200 carrying eight static URLs is a complete-
+    // looking sitemap a crawler accepts as the new list, whereas a 5xx is a
+    // fetch error it retries while keeping its last successful copy — which IS
+    // "retain the last complete inventory", held by the only party that has
+    // one. The old branch returned the static pages instead, defending itself
+    // with a build-time hazard that force-dynamic had already removed. With
+    // getListings refusing partial books, this one throw also covers "some
+    // pages failed".
+    throw new Error("Feed unavailable; refusing to publish a partial sitemap");
   }
   const listingEntries: MetadataRoute.Sitemap = feed.listings.map((l) => ({
     url: SITE_URL + "/properties/" + l.reference,
