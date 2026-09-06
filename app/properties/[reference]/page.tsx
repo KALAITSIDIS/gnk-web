@@ -23,6 +23,7 @@ import {
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { ListingContactBar } from "@/components/listing-contact-bar";
+import { JsonLd } from "@/components/json-ld";
 import { listingBreadcrumbs, listingJsonLd } from "@/lib/jsonld";
 import { OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
@@ -170,14 +171,10 @@ export default async function PropertyPage({
   return (
     <>
     <article className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs) }}
-      />
+      {/* Through the one sink: JSON.stringify alone leaves `<` intact, and a
+          </script> in a title would end the block — see components/json-ld.tsx. */}
+      <JsonLd data={jsonLd} />
+      <JsonLd data={breadcrumbs} />
 
       <Link href="/properties" className="text-sm text-ink-2 hover:text-accent">
         ← All properties
