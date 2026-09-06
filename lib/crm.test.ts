@@ -49,6 +49,20 @@ describe("a feed failure is never 'no such property'", () => {
     });
   }
 
+  it("asks fetch to give up, so a CRM that accepts and never answers cannot hang the page", async () => {
+    // The "a timeout" case above only proves a TimeoutError is handled once it
+    // arrives. Nothing pinned that one is ever REQUESTED — remove the
+    // AbortSignal.timeout(...) from lib/crm.ts and every case still passes,
+    // while a stalled CRM holds the home page open until the platform kills
+    // the function.
+    const f = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() => ok({ listings: [] }) as never);
+    await getListings();
+    const init = f.mock.calls[0][1] as RequestInit;
+    expect(init.signal, "every feed request carries an abort signal").toBeInstanceOf(AbortSignal);
+  });
+
   it("distinguishes a genuinely empty book from a broken feed", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(() => ok({ listings: [] }) as never);
     expect(await getListings()).toEqual({ ok: true, listings: [] });

@@ -1,4 +1,4 @@
-import type { Listing, Multilang } from "@/lib/crm";
+import type { Listing, ListingImage, Multilang } from "@/lib/crm";
 
 /** Phase 1 renders English. When /ru lands, this takes the active locale. */
 export function text(m: Multilang | undefined, fallback = ""): string {
@@ -35,8 +35,9 @@ export function money(n: number | null | undefined): string | null {
  * not whether they are true.
  *
  * So: a container prices "from", and its unit-shaped rows are withheld. What is
- * genuinely true of a development — that it is one, its build stage and its
- * delivery date — still renders.
+ * genuinely true of a development — that it is one, its build stage, its
+ * delivery date and its energy class (which the CRM inherits from a project to
+ * its units) — still renders. Its year built does not: see yearBuiltLabel.
  */
 export function isContainer(l: Listing): boolean {
   return l.kind === "project" || l.kind === "phase";
@@ -125,10 +126,18 @@ export function placeLine(l: Listing): string {
   return where ? `${what} in ${where}` : what;
 }
 
-/** The cover photograph, or the first one, or nothing. */
-export function coverImage(l: Listing) {
-  const imgs = l.images ?? [];
-  return imgs.find((i) => i.is_cover) ?? imgs[0] ?? null;
+/**
+ * The cover photograph: the FIRST one, because the feed puts it first.
+ *
+ * There is no flag to read. public_listings() orders `is_cover desc,
+ * sort_order, created_at` and its image objects carry exactly {thumb, card,
+ * full, alt, watermarked} — see ListingImage in lib/crm.ts. For six days this
+ * looked for an `is_cover` the feed has never sent, and was right by accident
+ * because find() failed and fell through to [0]. gnk-crm RLS test 49 is what
+ * catches the feed changing; this reads the contract as written.
+ */
+export function coverImage(l: Listing): ListingImage | null {
+  return (l.images ?? [])[0] ?? null;
 }
 
 export function titleOf(l: Listing): string {
@@ -230,15 +239,23 @@ export function constructionLabel(l: Listing): string | null {
 /**
  * Property types that ARE a floor inside somebody else's building.
  * Everything else owns its storeys rather than occupying one of them.
+ *
+ * `kind` is deliberately NOT consulted. In the CRM kind = "unit" means "a
+ * child of a project" and nothing more (container-units.ts), and the CRM
+ * generates VILLA units on purpose — generateVillaUnits writes floor_number
+ * null because "they do not stack". A villa in a development is still a villa;
+ * only its TYPE says whether it occupies a floor. Reading kind here re-opened
+ * the "villa on Floor 2 of 2" class for any villa unit whose floor and total
+ * were typed by hand.
  */
 const UNITS_IN_A_BUILDING = new Set(["apartment", "office", "shop"]);
 
 function isUnitInABuilding(l: Listing): boolean {
-  return l.kind === "unit" || UNITS_IN_A_BUILDING.has(l.property_type);
+  return UNITS_IN_A_BUILDING.has(l.property_type);
 }
 
 /**
- * "2 of 2" is a POSITION, and only a unit has one.
+ * "2 of 2" is a POSITION, and only a floor of somebody else's building has one.
  *
  * The site composed floor_number and total_floors into that string for every
  * listing, so PAF0001 — a detached villa on a 1,200 m² plot — published "Floor
@@ -257,8 +274,25 @@ export function floorLabel(l: Listing): string | null {
     : null;
 }
 
-/** How many storeys a whole dwelling has. Meaningless for land, and for a unit. */
+/** How many storeys a whole dwelling has. Meaningless for land, and for anything that occupies a floor. */
 export function storeysLabel(l: Listing): string | null {
   if (isContainer(l) || l.property_type === "land" || isUnitInABuilding(l)) return null;
   return l.total_floors && l.total_floors > 1 ? String(l.total_floors) : null;
+}
+
+/**
+ * Year built, only for something built as one thing.
+ *
+ * On a container it is an orphan number: gnk-crm does not inherit year_built
+ * from a project to its units (lib/services/unit-inheritance.ts
+ * INHERITED_UNIT_FIELDS — absent; the create wizard never asks for it), so a
+ * project's year and its villas' are two columns nothing connects, and a phased
+ * development has no single year at all. The CRM keeps the field in the same
+ * "Areas & rooms" grid as bedrooms and floor; withheld here for the same
+ * reason those are. energy_class is the OPPOSITE case — the CRM inherits it
+ * — so that row still renders on a development.
+ */
+export function yearBuiltLabel(l: Listing): string | null {
+  if (isContainer(l)) return null;
+  return l.year_built ? String(l.year_built) : null;
 }

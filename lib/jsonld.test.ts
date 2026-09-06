@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Listing } from "@/lib/crm";
-import { listingBreadcrumbs, listingJsonLd } from "./jsonld";
+import { site } from "@/lib/site";
+import { listingBreadcrumbs, listingJsonLd, organizationJsonLd } from "./jsonld";
 
 /**
  * The structured data is the copy of the page nobody reads.
@@ -32,7 +33,7 @@ const development = {
   bedrooms: 5,
   bathrooms: 5,
   covered_area_sqm: 300,
-  images: [{ card: "https://cdn.example/paf0002-card.jpg", thumb: null, is_cover: true }],
+  images: [{ card: "https://cdn.example/paf0002-card.jpg", thumb: null }],
 } as unknown as Listing;
 
 /** PAF0001 as it actually is: one dwelling, whose own figures are its own. */
@@ -51,7 +52,7 @@ const villa = {
   bedrooms: 3,
   bathrooms: 3,
   covered_area_sqm: 185,
-  images: [{ card: "https://cdn.example/paf0001-card.jpg", thumb: null, is_cover: true }],
+  images: [{ card: "https://cdn.example/paf0001-card.jpg", thumb: null }],
 } as unknown as Listing;
 
 describe("a development publishes no more than its page shows", () => {
@@ -128,5 +129,31 @@ describe("a listing with no price", () => {
   it("emits no offer at all rather than an empty one", () => {
     const poa = { ...villa, asking_price: null } as unknown as Listing;
     expect(listingJsonLd(poa)).not.toHaveProperty("offers");
+  });
+});
+
+describe("the organisation says where it is from the same fields the footer prints", () => {
+  it("carries the locality from lib/site.ts and nowhere else", () => {
+    const ld = organizationJsonLd();
+    expect(ld["@type"]).toBe("Organization");
+    expect(ld.address.addressLocality).toBe(site.contact.locality);
+    expect(ld.address.addressCountry).toBe(site.contact.countryCode);
+    expect(ld.areaServed).toEqual({ "@type": "AdministrativeArea", name: site.contact.city });
+  });
+
+  it("has no street while lib/site.ts has none — the footer's null is this null", () => {
+    const noStreet = { ...site, contact: { ...site.contact, street: null } };
+    expect(organizationJsonLd(noStreet).address).not.toHaveProperty("streetAddress");
+  });
+
+  it("gains the street the day lib/site.ts has one, without another edit", () => {
+    const withStreet = { ...site, contact: { ...site.contact, street: "1 Example Street" } };
+    expect(organizationJsonLd(withStreet).address.streetAddress).toBe("1 Example Street");
+  });
+
+  it("never declares the regulated type", () => {
+    // RealEstateAgent is a machine-readable claim of a licence the firm does
+    // not hold. lib/site.ts holds null registration numbers for that reason.
+    expect(JSON.stringify(organizationJsonLd())).not.toContain("RealEstateAgent");
   });
 });

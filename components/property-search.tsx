@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import type { Listing } from "@/lib/crm";
 import { label, placeLine, text, titleOf } from "@/lib/format";
-import { bedroomOptionsFor, matchesBedrooms, priceStepsFor } from "@/lib/search";
+import {
+  bedroomOptionsFor,
+  matchesBedrooms,
+  matchesMaxPrice,
+  priceStepsFor,
+  salePrice,
+} from "@/lib/search";
 import { PropertyCard } from "@/components/property-card";
 
 /**
@@ -42,11 +48,10 @@ export function PropertySearch({
   // lib/search.ts — a development contributes no bedroom count: its own is
   // the one figure every other surface withholds.
   const bedOptions = useMemo(() => bedroomOptionsFor(listings), [listings]);
+  // lib/search.ts — sale prices only: a rental's month is not a rung on this
+  // ladder, and would have dragged it down to a step no sale can match.
   const prices = useMemo(
-    () =>
-      listings
-        .map((l) => (l.transaction_type === "rent" ? l.rent_price_month : l.asking_price))
-        .filter((p): p is number => !!p),
+    () => listings.map(salePrice).filter((p): p is number => !!p),
     [listings],
   );
   // lib/search.ts — a step must be able to include something and exclude
@@ -58,10 +63,7 @@ export function PropertySearch({
     return listings.filter((l) => {
       if (type && l.property_type !== type) return false;
       if (!matchesBedrooms(l, beds)) return false;
-      if (maxPrice) {
-        const p = l.transaction_type === "rent" ? l.rent_price_month : l.asking_price;
-        if (p && p > Number(maxPrice)) return false;
-      }
+      if (!matchesMaxPrice(l, maxPrice)) return false;
       if (needle) {
         const hay = [
           titleOf(l),

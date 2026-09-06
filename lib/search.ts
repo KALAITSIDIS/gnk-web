@@ -62,3 +62,33 @@ export function matchesBedrooms(l: Listing, minBeds: string): boolean {
   if (isContainer(l)) return false;
   return (l.bedrooms ?? 0) >= Number(minBeds);
 }
+
+/**
+ * The figure the price ladder is denominated in: what a listing is for sale
+ * at, outright. A rental has no such figure — its 1,500 is a month, not a
+ * price — so it contributes nothing to the ladder and satisfies no rung of it.
+ *
+ * The search bar used to read the price inline, twice, as
+ * `transaction_type === "rent" ? rent_price_month : asking_price`: one array of
+ * monthly rents and outright prices, one ceiling applied to both. On the live
+ * book plus a single €1,500/month rental that would have offered "Up to €250k"
+ * again — the step removed because no sale is that cheap — and returned the
+ * rental alone beneath it, on a card reading "/ month". Same rule as the
+ * bedroom control above: a listing contributes no option and matches no
+ * filter for a figure it does not have. priceLabel in lib/format.ts is the
+ * display side of the same rule, and the test pins that the two agree.
+ */
+export function salePrice(l: Listing): number | null {
+  if (l.transaction_type === "rent") return null;
+  return l.asking_price ?? null;
+}
+
+/** Whether a listing satisfies a maximum-price filter; "" means no filter. */
+export function matchesMaxPrice(l: Listing, maxPrice: string): boolean {
+  if (!maxPrice) return true;
+  if (l.transaction_type === "rent") return false;
+  const p = salePrice(l);
+  // Price on application stays under any ceiling, as it always did: it may
+  // well be under it, and the card says "Price on application" honestly.
+  return !p || p <= Number(maxPrice);
+}

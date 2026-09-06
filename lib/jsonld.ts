@@ -1,6 +1,51 @@
 import type { Listing } from "@/lib/crm";
 import { isContainer, placeLine, text, titleOf } from "@/lib/format";
-import { absolute } from "@/lib/site-url";
+import { site } from "@/lib/site";
+import { absolute, SITE_URL } from "@/lib/site-url";
+
+/**
+ * Who this firm is, for machines.
+ *
+ * TYPE CHOICE IS DELIBERATE AND LOAD-BEARING. schema.org offers
+ * `RealEstateAgent`, which is what a Cyprus property firm would normally
+ * declare — and this firm is NOT registered or licensed under the Real Estate
+ * Agents Law 71(I)/2010. Declaring that type is a machine-readable assertion of
+ * exactly the status lib/site.ts holds null registration numbers to avoid
+ * claiming in prose. `Organization` is accurate and asserts nothing regulated.
+ *
+ * Every value comes from lib/site.ts — the same fields the footer prints, so
+ * the two cannot disagree. The address is the locality the footer already
+ * shows, plus a street only when site.contact.street has one: the same null
+ * gates both. (The component that held this used to say "no address" in its
+ * comment while emitting a PostalAddress with literals of its own.)
+ */
+export function organizationJsonLd(firm: typeof site = site) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: firm.name,
+    alternateName: firm.shortName,
+    url: SITE_URL,
+    description: firm.positioning,
+    email: firm.contact.email,
+    telephone: firm.contact.phone,
+    areaServed: { "@type": "AdministrativeArea", name: firm.contact.city },
+    address: {
+      "@type": "PostalAddress",
+      ...(firm.contact.street ? { streetAddress: firm.contact.street } : {}),
+      addressLocality: firm.contact.locality,
+      addressCountry: firm.contact.countryCode,
+    },
+    contactPoint: {
+      "@type": "ContactPoint",
+      contactType: "sales",
+      email: firm.contact.email,
+      telephone: firm.contact.phone,
+      areaServed: firm.contact.countryCode,
+      availableLanguage: ["en"],
+    },
+  };
+}
 
 /**
  * The machine-readable copy of a listing page.

@@ -36,12 +36,17 @@ export function EnquiryForm({
      the focus handling, the email-or-phone guard, the honeypot — is shared
      rather than copied into siblings that would drift out of step. */
   variant,
+  /* The district/area picker's options. Defaults to the firm's marketing
+     coverage; the properties page passes areasWithFeed(...) so a buyer can
+     always pick the area a live listing is filed under. */
+  areas = AREAS,
 }: {
   reference?: string;
   heading?: string;
   intro?: string;
   cta?: string;
   variant?: "buyer" | "seller";
+  areas?: Record<string, string[]>;
 }) {
   const seller = variant === "seller";
   const buyer = variant === "buyer";
@@ -203,7 +208,7 @@ export function EnquiryForm({
               <span className="mb-1 block text-sm text-ink-2">District</span>
               <select name="district" className={field} defaultValue="">
                 <option value="">Select…</option>
-                {Object.keys(AREAS).map((d) => (
+                {Object.keys(areas).map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -217,7 +222,7 @@ export function EnquiryForm({
                   reach the desk, which can read them together. */}
               <select name="area" className={field} defaultValue="">
                 <option value="">Select…</option>
-                {Object.entries(AREAS).map(([d, list]) => (
+                {Object.entries(areas).map(([d, list]) => (
                   <optgroup key={d} label={d}>
                     {list.map((a) => (
                       <option key={a} value={a}>
@@ -327,7 +332,7 @@ export function EnquiryForm({
               <span className="mb-1 block text-sm text-ink-2">Area</span>
               <select name="buy_area" className={field} defaultValue="">
                 <option value="">Anywhere / not sure</option>
-                {Object.entries(AREAS).map(([d, list]) => (
+                {Object.entries(areas).map(([d, list]) => (
                   <optgroup key={d} label={d}>
                     {list.map((a) => (
                       <option key={a} value={a}>

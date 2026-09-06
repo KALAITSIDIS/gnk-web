@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Listing } from "@/lib/crm";
-import { bedroomOptionsFor, matchesBedrooms, priceStepsFor } from "./search";
+import { priceLabel } from "@/lib/format";
+import {
+  bedroomOptionsFor,
+  matchesBedrooms,
+  matchesMaxPrice,
+  priceStepsFor,
+  salePrice,
+} from "./search";
 
 /** The three properties actually published on 2026-09-05. */
 const LIVE = [285_000, 450_000, 780_000];
@@ -75,5 +82,57 @@ describe("the bedroom control never reads a development's own count", () => {
   it("dedupes and sorts what it does offer", () => {
     const twin = { ...villa, reference: "PAF0009" } as unknown as Listing;
     expect(bedroomOptionsFor([villa, flat, twin])).toEqual([2, 3]);
+  });
+});
+
+describe("a step exactly at a listing's price", () => {
+  it("is offered, because 'up to' includes it — and a step at the dearest is not", () => {
+    // Boundaries were never exercised: >= the cheapest keeps a step equal to
+    // the cheapest, < the dearest drops one equal to the dearest.
+    expect(priceStepsFor([250_000, 900_000])).toContain(250_000);
+    expect(priceStepsFor([300_000, 750_000])).not.toContain(750_000);
+  });
+});
+
+const sale = (asking_price: number | null) =>
+  ({ kind: "standalone", transaction_type: "sale", asking_price, rent_price_month: null }) as unknown as Listing;
+/** No rental is published today; this is the first one, at a plausible Paphos rent. */
+const rental = {
+  kind: "standalone",
+  transaction_type: "rent",
+  asking_price: null,
+  rent_price_month: 1_500,
+} as unknown as Listing;
+
+describe("a rental's month is not a rung on the sale ladder", () => {
+  const book = [rental, ...LIVE.map((p) => sale(p))];
+  const ladderInputs = (ls: Listing[]) => ls.map(salePrice).filter((p): p is number => !!p);
+
+  it("contributes no price, so it cannot drag the ladder down to a step no sale can match", () => {
+    // Read inline, 1,500 joined the array and "Up to €250k" came back — the
+    // step removed because no sale is that cheap — returning the rental alone
+    // beneath it, on a card that reads "/ month".
+    expect(ladderInputs(book)).toEqual(LIVE);
+    expect(priceStepsFor(ladderInputs(book))).not.toContain(250_000);
+  });
+
+  it("satisfies no ceiling, however high", () => {
+    expect(matchesMaxPrice(rental, "500000")).toBe(false);
+    expect(matchesMaxPrice(rental, "5000000")).toBe(false);
+  });
+
+  it("is still in the results when no ceiling is set", () => {
+    expect(matchesMaxPrice(rental, "")).toBe(true);
+  });
+
+  it("agrees with the card: what has no sale price is priced per month", () => {
+    expect(salePrice(rental)).toBeNull();
+    expect(priceLabel(rental)).toBe("€1,500 / month");
+  });
+
+  it("keeps ordinary ceiling semantics for a sale, and lets price-on-application through", () => {
+    expect(matchesMaxPrice(sale(450_000), "500000")).toBe(true);
+    expect(matchesMaxPrice(sale(780_000), "500000")).toBe(false);
+    expect(matchesMaxPrice(sale(null), "500000")).toBe(true);
   });
 });
