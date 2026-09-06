@@ -184,6 +184,38 @@ describe("handing an enquiry to the CRM", () => {
     expect("x-gnk-visitor-ip" in headers).toBe(false);
   });
 
+  it("proves it is the forwarder with the configured key — the CRM believes the address only then", async () => {
+    // Since 2026-09-06 the CRM ignores x-gnk-visitor-ip from anyone who cannot
+    // present the shared key; without this header every visitor would again
+    // share one budget of five.
+    vi.stubEnv("CRM_FORWARD_KEY", "the-shared-key");
+    try {
+      const f = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("", { status: 202 }));
+      await submitEnquiry({ name: "A Buyer" }, "198.51.100.22");
+      const headers = (f.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      expect(headers["x-gnk-forward-key"]).toBe("the-shared-key");
+      expect(headers["x-gnk-visitor-ip"]).toBe("198.51.100.22");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("sends no forward key when none is configured, rather than an empty one", async () => {
+    vi.stubEnv("CRM_FORWARD_KEY", "");
+    try {
+      const f = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("", { status: 202 }));
+      await submitEnquiry({ name: "A Buyer" }, "198.51.100.22");
+      const headers = (f.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+      expect("x-gnk-forward-key" in headers).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("never hands the CRM's validator wording to whoever filled the form", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

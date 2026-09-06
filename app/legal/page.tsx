@@ -56,12 +56,20 @@ export default function LegalPage() {
             it is salted and hashed into a short-lived counter. A visitor can already SEE
             that metering — refuse too many and the form answers "Too many enquiries from
             this address" — so the notice has to account for it. If the rate limiting ever
-            changes, this paragraph changes with it. */}
+            changes, this paragraph changes with it.
+
+            2026-09-06: "It identifies nobody" went. The fingerprint was salted with the
+            CRM's public project URL, so anyone holding a fingerprint could sweep IPv4 and
+            name the address in minutes — the sentence was true only of people who could
+            not be bothered. The salt is now a secret held by our own system (gnk-crm
+            lib/services/ip-hash.ts, IP_HASH_SALT), which is what the paragraph now says,
+            and it claims no more than that. */}
         <p className="mt-3 text-ink-2">
           Sending the form also tells us the internet address it came from. We never store
-          the address itself — only a scrambled, one-way fingerprint of it, kept briefly so
-          that one person cannot flood the form and block everyone else&apos;s enquiries. It
-          identifies nobody and is not used for anything else.
+          the address itself — only a scrambled, one-way fingerprint of it, made with a key
+          that nobody outside our own system holds and kept briefly so that one person
+          cannot flood the form and block everyone else&apos;s enquiries. It is not used for
+          anything else.
         </p>
         <p className="mt-3 text-ink-2">
           {/* The off-list brief on /properties repeats these three promises verbatim.
