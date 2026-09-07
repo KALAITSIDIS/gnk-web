@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Listing } from "@/lib/crm";
-import { label, placeLine, text, titleOf } from "@/lib/format";
+import { label, moneyShort, placeLine, text, titleOf } from "@/lib/format";
 import {
   bedroomOptionsFor,
   matchesBedrooms,
@@ -159,7 +159,7 @@ export function PropertySearch({
               <option value="">Any price</option>
               {priceSteps.map((s) => (
                 <option key={s} value={s}>
-                  Up to €{(s / 1000).toLocaleString("en-IE")}k
+                  Up to {moneyShort(s)}
                 </option>
               ))}
             </select>

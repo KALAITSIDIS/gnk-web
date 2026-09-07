@@ -27,6 +27,27 @@ export function money(n: number | null | undefined): string | null {
 }
 
 /**
+ * A price at a glance: "€250k", "€1.5m" — for a control where the full figure
+ * would crowd the label out.
+ *
+ * Here rather than in the search bar, which composed `€{(s / 1000)…}k` itself:
+ * lib/format.ts says the site holds ONE currency and the test held that to the
+ * "EUR" literal, which a bare € symbol walked straight past (2026-09-07
+ * review). Same formatter, same CURRENCY, so a ladder rung and the card it
+ * filters can never disagree about what money looks like.
+ */
+/** The symbol, asked of the same formatter rather than typed a second time. */
+const CURRENCY_SYMBOL =
+  EUR.formatToParts(0).find((part) => part.type === "currency")?.value ?? CURRENCY;
+
+export function moneyShort(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${CURRENCY_SYMBOL}${Number((n / 1_000_000).toFixed(1))}m`;
+  if (abs >= 1_000) return `${CURRENCY_SYMBOL}${Math.round(n / 1_000)}k`;
+  return EUR.format(n);
+}
+
+/**
  * A development is not a dwelling, and almost nothing on a container describes
  * something a buyer can buy.
  *
