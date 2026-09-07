@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Listing } from "@/lib/crm";
 import {
   area,
-  bedroomsOf,
+  bedroomsSpec,
   coverImage,
   deedLabel,
   isContainer,
@@ -47,14 +47,12 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
   /* A development's own beds/baths/area describe no dwelling for sale — the
      units carry those. Showing them puts one villa's shape on a project that
      contains six of a different shape. */
-  /* bedroomsOf is the one bedrooms rule (it already withholds a container's);
-     a studio's zero is kept and said as a word, where `if (bedrooms)` dropped
-     the one fact that defines a studio. */
-  const beds = bedroomsOf(listing);
+  /* One function decides the chip, including that a studio says so — the card
+     held its own copy of that rule for a day, pinned by nothing. */
   const specs = isProject
     ? []
     : [
-        beds === null ? null : beds === 0 ? "Studio" : `${beds} bed`,
+        bedroomsSpec(listing),
         listing.bathrooms ? `${listing.bathrooms} bath` : null,
         area(listing.covered_area_sqm),
       ].filter(Boolean);

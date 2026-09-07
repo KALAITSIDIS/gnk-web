@@ -8,8 +8,8 @@
  * 0084's door takes no structured fields and parses nothing — so an unknown
  * value costs the desk a moment at filing, never the enquiry.
  *
- * WHAT BINDS THEM. The site holds no credentials and cannot read the CRM's
- * enum, so PROPERTY_TYPES is a PINNED COPY: enquiry-fields.test.ts holds the
+ * WHAT BINDS THEM. The site holds no CRM database credential and cannot read
+ * the enum, so PROPERTY_TYPES is a PINNED COPY: enquiry-fields.test.ts holds the
  * CRM's list with the commit it was copied from and fails on any drift between
  * the two — re-pin there when the CRM's list changes. AREAS is not a copy of
  * anything: the CRM's areas are operator-editable (Settings → Locations;

@@ -255,6 +255,20 @@ describe("the organisation says where it is from the same fields the footer prin
     expect(ld.areaServed).toEqual({ "@type": "AdministrativeArea", name: site.contact.city });
   });
 
+  it("takes it from the firm it is GIVEN — asserting against site.ts alone passes a hard-coded 'Paphos'", () => {
+    // The test above compares the output to the same constant the code reads,
+    // so replacing `firm.contact.locality` in jsonld.ts with the literal
+    // "Paphos" (site.ts's value) left it green. This one cannot be.
+    const elsewhere = {
+      ...site,
+      contact: { ...site.contact, locality: "Limassol", city: "Limassol, Cyprus" },
+    };
+    const ld = organizationJsonLd(elsewhere);
+    expect(ld.address.addressLocality).toBe("Limassol");
+    expect(ld.areaServed).toEqual({ "@type": "AdministrativeArea", name: "Limassol, Cyprus" });
+    expect(JSON.stringify(ld)).not.toContain("Paphos");
+  });
+
   it("has no street while lib/site.ts has none — the footer's null is this null", () => {
     const noStreet = { ...site, contact: { ...site.contact, street: null } };
     expect(organizationJsonLd(noStreet).address).not.toHaveProperty("streetAddress");

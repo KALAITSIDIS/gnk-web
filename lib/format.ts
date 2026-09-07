@@ -144,6 +144,20 @@ export function bedroomsLabel(l: Listing): string | null {
   return n === 0 ? "Studio" : String(n);
 }
 
+/**
+ * The card's chip: "Studio" or "3 bed", nothing when unknown.
+ *
+ * A function rather than two lines in the card, because the card held its own
+ * copy of the zero rule for a day — `beds === 0 ? "Studio" : …` beside the one
+ * in bedroomsLabel — and the card's copy was pinned by nothing (2026-09-07
+ * review). The card renders what this returns; the rule is here, once, tested.
+ */
+export function bedroomsSpec(l: Listing): string | null {
+  const n = bedroomsOf(l);
+  if (n === null) return null;
+  return n === 0 ? "Studio" : `${n} bed`;
+}
+
 const WORDS: Record<string, string> = {
   sea_view: "Sea view",
   mountain_view: "Mountain view",

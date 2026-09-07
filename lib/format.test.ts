@@ -6,6 +6,7 @@ import type { Listing } from "@/lib/crm";
 import {
   bedroomsLabel,
   bedroomsOf,
+  bedroomsSpec,
   constructionLabel,
   coverImage,
   CURRENCY,
@@ -318,6 +319,16 @@ describe("bedrooms are a fact about one dwelling, and zero is a studio", () => {
   it("renders a dwelling's count", () => {
     expect(bedroomsOf(villa)).toBe(3);
     expect(bedroomsLabel(villa)).toBe("3");
+  });
+
+  it("says the word on the card too — the chip and the facts cell agree", () => {
+    const studio = { ...villa, property_type: "apartment", bedrooms: 0 } as Listing;
+    expect(bedroomsSpec(studio)).toBe("Studio");
+    expect(bedroomsSpec(villa)).toBe("3 bed");
+    expect(bedroomsSpec(development)).toBeNull();
+    expect(bedroomsSpec({ ...villa, bedrooms: null } as Listing)).toBeNull();
+    // the two renderings of one rule never disagree about a studio
+    expect(bedroomsSpec(studio)).toBe(bedroomsLabel(studio));
   });
 
   it("treats a missing or nonsense value as unknown, not as a studio", () => {

@@ -14,9 +14,17 @@ The site is a CLIENT of the CRM's public API and nothing else:
 | Listings | `GET  {CRM_API_URL}/api/public/listings?org={CRM_ORG_SLUG}` |
 | Enquiries | `POST {CRM_API_URL}/api/public/enquiries` |
 
-Both are unauthenticated, rate-limited and RLS-bound on the CRM side
-(migrations 0066, 0073, 0084). **This repo must never contain a Supabase key,
-a service-role key, or any database credential.** If this site is ever
+Both are unauthenticated and rate-limited on the CRM side, and each is bounded
+differently — worth stating precisely, because "RLS-bound" stopped being true
+of the second one. The **feed** is an anon-scoped `security definer` function
+whose returned columns are an allowlist in SQL (migrations 0066, 0073, 0085,
+0088): a column added to the CRM's tables is withheld until someone edits that
+function. The **enquiry door** is a Next route holding the CRM's service-role
+client, which bypasses RLS by design — since migration 0087 the database grants
+those functions to nobody else, so the route's own controls (a per-visitor rate
+counter, a honeypot, an email-format check) are what bound it, not RLS.
+**This repo must never contain a Supabase key, a service-role key, or any
+database credential.** If this site is ever
 compromised, the blast radius is "read published listings and submit an
 enquiry" — which is what any visitor can already do. That property is
 deliberate; do not trade it away for convenience.

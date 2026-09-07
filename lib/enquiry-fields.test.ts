@@ -136,7 +136,7 @@ describe("the desk reads English, not tokens", () => {
  * written: "hotel" had been in the CRM's list since 2026-07-10 and was never
  * here. A date cannot fail; this can.
  *
- * The site holds no credentials and cannot read the enum, so this is a PINNED
+ * The site holds no CRM database credential and cannot read the enum, so this is a PINNED
  * COPY with its provenance, not a live check. It binds the form's list to the
  * record and makes "the CRM's list" checkable by anyone with the CRM checkout:
  *   git -C ../gnk-crm show 7e4a008:lib/validators/properties.ts

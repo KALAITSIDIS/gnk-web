@@ -13,9 +13,12 @@ import { describe, expect, it } from "vitest";
  * The README said "the only configuration is CRM_API_URL" from the repo's first
  * commit while the code, from its first commit, read three variables — nothing
  * connected the sentence to lib/crm.ts and lib/site-url.ts, so nothing failed.
- * Now a new read anywhere (a SUPABASE_* key included, which README § "It holds
- * no credentials" promises never appears), a moved read, or a changed default
- * fails CI until the table says so.
+ * Now a new read anywhere, a moved read, or a changed default fails CI until
+ * the table says so — and a credential-shaped name fails outright unless it is
+ * the ONE README § "It holds one secret, and that secret grants nothing"
+ * admits. (That section was called "It holds no credentials" until 2026-09-06,
+ * and this comment went on citing the old title after the rename: the same
+ * one-fact-in-two-places drift the test itself exists to prevent.)
  */
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SHIPPED = ["app", "components", "lib"];

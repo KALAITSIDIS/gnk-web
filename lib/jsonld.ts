@@ -29,7 +29,31 @@ import { absolute, SITE_URL } from "@/lib/site-url";
  * gates both. (The component that held this used to say "no address" in its
  * comment while emitting a PostalAddress with literals of its own.)
  */
-export function organizationJsonLd(firm: typeof site = site) {
+/**
+ * What this function reads out of a firm — a SHAPE, not the one literal object.
+ *
+ * The parameter was `typeof site`, and `lib/site.ts` is `as const`, so every
+ * field's type is its own value ("Paphos", not string): no test could hand it a
+ * different firm, and the one test that claimed the locality comes "from
+ * lib/site.ts and nowhere else" was comparing the output to the very constant
+ * the code reads — a hard-coded literal passed it. Widened so that test can be
+ * written (2026-09-07 review).
+ */
+export interface FirmIdentity {
+  name: string;
+  shortName: string;
+  positioning: string;
+  contact: {
+    email: string;
+    phone: string;
+    city: string;
+    locality: string;
+    countryCode: string;
+    street: string | null;
+  };
+}
+
+export function organizationJsonLd(firm: FirmIdentity = site) {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
