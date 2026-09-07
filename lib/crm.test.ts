@@ -79,7 +79,10 @@ const paged =
   (url: string | URL | Request) => {
     const u = new URL(String(url instanceof Request ? url.url : url));
     const offset = Number(u.searchParams.get("offset") ?? 0);
-    const page = rows.slice(offset, offset + size);
+    // `?reference=` answers one row, case-insensitively, as the CRM does (0088)
+    const ref = u.searchParams.get("reference")?.toLowerCase() ?? null;
+    const book = ref ? rows.filter((r) => r.reference.toLowerCase() === ref) : rows;
+    const page = book.slice(offset, offset + size);
     return Promise.resolve(
       new Response(JSON.stringify({ listings: page, limit: size, offset, count: page.length }), {
         status: 200,
@@ -155,6 +158,24 @@ describe("finding one listing", () => {
       const found = await getListing(typed);
       expect(found.ok && found.listing?.reference, typed).toBe("PAF0001");
     }
+  });
+
+  it("asks the CRM for ONE reference rather than reading the whole book (gnk-crm 0088)", async () => {
+    const f = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(() => ok({ listings: [listing("PAF0001")] }) as never);
+    await getListing("paf0001");
+    expect(f).toHaveBeenCalledTimes(1);
+    const url = new URL(String(f.mock.calls[0]![0]));
+    expect(url.searchParams.get("reference")).toBe("paf0001");
+    expect(url.searchParams.get("org")).toBe("gnk");
+  });
+
+  it("is still the last word: a CRM that ignores the parameter answers the feed, and the wrong row is not taken", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => ok({ listings: [listing("PAF0002"), listing("PAF0003")] }) as never,
+    );
+    expect(await getListing("PAF0001")).toEqual({ ok: true, listing: null });
   });
 
   it("returns ok with a null listing when the feed answered and has no match", async () => {
