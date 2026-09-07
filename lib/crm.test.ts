@@ -71,6 +71,17 @@ describe("a feed failure is never 'no such property'", () => {
   });
 });
 
+/**
+ * The ETag the CRM actually sends: `W/"<snapshot>-<body digest>"` since
+ * gnk-crm's T-etag-from-body. readAllPages compares the part before the first
+ * `-`, so a fixture must vary that part per snapshot or the whole moved-book
+ * mechanism is untestable — which it was until 2026-09-07: every fixture sent
+ * one constant ETag, so `moved` was never true and deleting the comparison,
+ * the second read and the warning left the suite green, while the CRM keeps
+ * `public_listings_etag` alive for this reader alone.
+ */
+const feedEtag = (snapshot: string, offset: number) => `W/"${snapshot}-d${offset}"`;
+
 /** A feed of N references served in pages of `size`, exactly as the CRM does it: offset in, `limit` echoed back. */
 const book = (n: number) =>
   Array.from({ length: n }, (_, i) => listing("PAF" + String(i + 1).padStart(4, "0")));
@@ -146,6 +157,76 @@ describe("the whole book, page by page", () => {
       (() => ok({ listings: book(50), limit: 50 })) as never,
     );
     expect(await getListings()).toEqual({ ok: false });
+  });
+});
+
+describe("a book that moves between pages", () => {
+  /** Serves `passes[pass][offset]` as the snapshot, so a fixture can move once and then settle. */
+  const moving = (rows: ReturnType<typeof listing>[], snapshotFor: (pass: number, offset: number) => string, size = 50) => {
+    let seen = 0;
+    const pageCount = Math.floor(rows.length / size) + 1;
+    return (url: string | URL | Request) => {
+      const u = new URL(String(url instanceof Request ? url.url : url));
+      const offset = Number(u.searchParams.get("offset") ?? 0);
+      const pass = Math.floor(seen / pageCount);
+      seen += 1;
+      const page = rows.slice(offset, offset + size);
+      return Promise.resolve(
+        new Response(JSON.stringify({ listings: page, limit: size, offset, count: page.length }), {
+          status: 200,
+          headers: { etag: feedEtag(snapshotFor(pass, offset), offset) },
+        }),
+      );
+    };
+  };
+
+  it("reads ONCE when every page came from the same snapshot", async () => {
+    const f = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(moving(book(60), () => "snapA") as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const r = await getListings();
+    expect(r.ok && r.listings.length).toBe(60);
+    expect(f.mock.calls.length, "two pages, one pass").toBe(2);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("reads the whole book AGAIN when the snapshot changed mid-read, and says nothing if it settles", async () => {
+    // The CRM's edge may hold a body for up to 60s, so page 2 can come from a
+    // newer snapshot than page 1. That is what the snapshot segment is for.
+    const f = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(moving(book(60), (pass, offset) => (pass === 0 && offset > 0 ? "snapB" : "snapA")) as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const r = await getListings();
+    expect(r.ok && r.listings.length).toBe(60);
+    expect(f.mock.calls.length, "two pages, twice: the first read moved").toBe(4);
+    expect(warn, "the second read was clean, so there is nothing to report").not.toHaveBeenCalled();
+  });
+
+  it("serves the union and SAYS SO when the book is still moving on the second read", async () => {
+    // Refusing would take the whole site down for a minute after every publish.
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      moving(book(60), (pass, offset) => (offset > 0 ? `snapMoving${pass}` : "snapA")) as never,
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const r = await getListings();
+    expect(r.ok && r.listings.length).toBe(60);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("changed between pages twice"));
+  });
+
+  it("does not mistake the body digest for the snapshot — one snapshot, different digests per page", async () => {
+    // The second segment differs on every page by construction (it is that
+    // page's bytes). Comparing the whole ETag instead of its first segment
+    // would report a move on every multi-page read.
+    const f = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(moving(book(120), () => "snapA") as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const r = await getListings();
+    expect(r.ok && r.listings.length).toBe(120);
+    expect(f.mock.calls.length, "three pages, ONE pass").toBe(3);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
