@@ -4,16 +4,18 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Listing } from "@/lib/crm";
 import {
+  CURRENCY,
   bedroomsLabel,
   bedroomsOf,
   bedroomsSpec,
   constructionLabel,
   coverImage,
-  CURRENCY,
-  heroImage,
   deliveryLabel,
   floorLabel,
+  heroImage,
   isContainer,
+  money,
+  moneyShort,
   placeLine,
   priceLabel,
   pricePerSqm,
@@ -352,6 +354,16 @@ describe("the currency has one home", () => {
   const stripComments = (src: string) =>
     src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
+  it("shortens a price without a second opinion about the symbol", () => {
+    expect(moneyShort(250_000)).toBe("€250k");
+    expect(moneyShort(780_000)).toBe("€780k");
+    expect(moneyShort(1_000_000)).toBe("€1m");
+    expect(moneyShort(1_500_000)).toBe("€1.5m");
+    expect(moneyShort(950)).toBe(money(950));
+    // the symbol comes from the one formatter, not from a typed character
+    expect(moneyShort(250_000).replace(/[\d.,km]/g, "")).toBe(money(0)!.replace(/[\d.,\s]/g, ""));
+  });
+
   it("is the feed's EUR (gnk-crm 0087 constrains the column), spelled in lib/format.ts and nowhere else", () => {
     expect(CURRENCY).toBe("EUR");
     const offenders: string[] = [];
@@ -363,6 +375,24 @@ describe("the currency has one home", () => {
       }
     }
     expect(offenders, "a second copy of the currency — read CURRENCY instead").toEqual([]);
+  });
+
+  it("and no file COMPOSES a money value with its own symbol", () => {
+    // The "EUR" scan above did not see `€{(s / 1000)…}k` in the search bar:
+    // a bare symbol beside an interpolated number is a second rendering of
+    // money, and it is what a buyer actually reads (2026-09-07 review).
+    // Static copy that merely mentions a figure is left alone — only a symbol
+    // fused to a computed value is caught.
+    const offenders: string[] = [];
+    for (const dir of ["app", "components", "lib"]) {
+      for (const file of shipped(join(root, dir))) {
+        const rel = relative(root, file).replace(/\\/g, "/");
+        if (rel === "lib/format.ts") continue;
+        const src = stripComments(readFileSync(file, "utf-8"));
+        if (/€\s*\{/.test(src)) offenders.push(rel);
+      }
+    }
+    expect(offenders, "compose it through money() or moneyShort()").toEqual([]);
   });
 });
 
