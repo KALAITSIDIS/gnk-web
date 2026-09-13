@@ -123,6 +123,19 @@ export function matchesArea(l: Listing, area: string): boolean {
 }
 
 /**
+ * The grid for N cards. One card in a three-column grid floats in dead
+ * space; a small set gets a layout built for its size instead — which reads
+ * as deliberate, where a mostly-empty grid reads as a business with nothing
+ * to sell. One rule for the search results and the listing page's onward
+ * path, so the two grids can never disagree about what three cards look like.
+ */
+export function resultCols(n: number): string {
+  if (n === 1) return "md:grid-cols-[minmax(0,32rem)]";
+  if (n === 2) return "sm:grid-cols-2";
+  return "sm:grid-cols-2 xl:grid-cols-3";
+}
+
+/**
  * What the chip row says while a filter is on: "2 listings match".
  *
  * Only while filtering. The unfiltered book carries no count on purpose —

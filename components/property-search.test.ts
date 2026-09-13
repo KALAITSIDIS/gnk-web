@@ -99,6 +99,21 @@ describe("the server HTML always carries the whole book", () => {
     expect(html).toMatch(/Price: low to high/);
   });
 
+  it("places the sort beside the results it orders, not among the filters", () => {
+    /* Audit 2026-09-13: the sort read as a sixth filter. A filter changes
+       what is shown; a sort changes the order of what is shown. It now sits
+       in its own row above the grid with a visible label, outside both the
+       filter bar and the phone's fold. */
+    const html = render("");
+    const bar = /<div class="grid gap-3 border border-line[\s\S]*?<\/div>\s*<\/div>/.exec(html);
+    expect(bar, "the filter bar is rendered").not.toBeNull();
+    expect(bar![0]).not.toMatch(/name="sort"/);
+    const fold = /<div id="search-filters"[\s\S]*?<\/div>/.exec(html);
+    expect(fold![0]).not.toMatch(/name="sort"/);
+    expect(html).toMatch(/<label[^>]*for="sort"[^>]*>Sort by<\/label>/);
+    expect(html.indexOf('name="sort"')).toBeLessThan(html.indexOf("<article"));
+  });
+
   it("does not reach for useSearchParams or a Suspense boundary — that is what emptied the HTML", () => {
     // A call or an import, not the word: the component's own comment names the
     // hook to say why it is avoided, and a guard that trips on its explanation

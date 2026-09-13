@@ -25,8 +25,11 @@ import {
 } from "@/lib/format";
 import { EnquiryForm } from "@/components/enquiry-form";
 import { ListingContactBar } from "@/components/listing-contact-bar";
+import { PropertyCard } from "@/components/property-card";
 import { JsonLd } from "@/components/json-ld";
 import { listingBreadcrumbs, listingJsonLd } from "@/lib/jsonld";
+import { relatedHeading, relatedListings } from "@/lib/related";
+import { resultCols } from "@/lib/search";
 import { absolute, OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
@@ -183,6 +186,14 @@ export default async function PropertyPage({
      same page is worse than not withholding it at all. */
   const jsonLd = listingJsonLd(l);
   const breadcrumbs = listingBreadcrumbs(l);
+
+  /* The onward path (lib/related.ts): the closest other listings on the
+     book, or nothing. The book is the same fetch generateStaticParams makes
+     and Next serves it from its cache within the revalidate window; a book
+     that cannot be reached costs this block and nothing else — the page's
+     own listing was fetched above and it refuses to 404 on a hiccup. */
+  const book = await getListings();
+  const related = book.ok ? relatedListings(l, book.listings) : [];
 
   return (
     <>
@@ -368,6 +379,21 @@ export default async function PropertyPage({
         </div>
       </div>
 
+      {related.length > 0 ? (
+        <section className="mt-16 border-t border-line pt-10" aria-labelledby="related-heading">
+          {/* The heading is derived from the cards beneath it, never assumed
+              from this listing: "in Peyia / Coral Bay" only when every card
+              is there, else the district, else no place at all. */}
+          <h2 id="related-heading" className="text-2xl">
+            {relatedHeading(l, related)}
+          </h2>
+          <div className={`mt-6 grid gap-6 ${resultCols(related.length)}`}>
+            {related.map((r) => (
+              <PropertyCard key={r.reference} listing={r} />
+            ))}
+          </div>
+        </section>
+      ) : null}
     </article>
     {/* AFTER the article, as a sibling inside <main>: position: sticky then
         rides the viewport bottom only while the listing is on screen, and
