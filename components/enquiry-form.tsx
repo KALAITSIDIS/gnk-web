@@ -10,6 +10,7 @@ import {
   BUDGETS,
   BUYER_KEYS,
   BUY_TIMINGS,
+  contactDetailError,
   DEED_REQUIRED,
   INTENTS,
   LOOKING_TO,
@@ -27,6 +28,15 @@ import {
  * `reference` pre-fills what the enquiry is about, so a buyer looking at
  * PAF0001 never has to describe which property they mean — and the lead
  * arrives in the CRM already attached to it.
+ *
+ * WHAT IS REQUIRED IS SAID BEFORE SEND (second pass, 2026-09-13). The name
+ * was required and nothing said so; the email-or-phone rule surfaced only
+ * after a failed submit, as a message two fields below the ones it was
+ * about, with focus left on the button. The name label now says required,
+ * a note under email and phone says one of them is needed, and when the
+ * rule fails the message appears in that same place, both fields are marked
+ * invalid and point at it, and focus moves to the email field. Errors the
+ * server returns still sit by the button, since they are about the send.
  */
 export function EnquiryForm({
   reference,
@@ -34,9 +44,12 @@ export function EnquiryForm({
   intro,
   cta = "Send enquiry",
   /* Which side of the transaction is filling this in, if either. One form,
-     three uses: everything else — the no-JavaScript fallback, the send timeout,
+     four uses: everything else — the no-JavaScript fallback, the send timeout,
      the focus handling, the email-or-phone guard, the honeypot — is shared
-     rather than copied into siblings that would drift out of step. */
+     rather than copied into siblings that would drift out of step. The
+     valuation variant asks the seller's first three questions (where and
+     what) and none of the other nine: /valuation's intro promised "where the
+     property is and roughly what it is" over a form that asked neither. */
   variant,
   /* The district/area picker's options. Defaults to the firm's marketing
      coverage; the properties page passes areasWithFeed(...) so a buyer can
@@ -56,21 +69,29 @@ export function EnquiryForm({
   heading?: string;
   intro?: string;
   cta?: string;
-  variant?: "buyer" | "seller";
+  variant?: "buyer" | "seller" | "valuation";
   areas?: Record<string, string[]>;
   focusOnHash?: string;
 }) {
   const seller = variant === "seller";
   const buyer = variant === "buyer";
+  /* Where and what: the seller's first three fields, shared with the
+     valuation variant. The route turns whichever of these arrive into the
+     same "About the property" block. */
+  const whereAndWhat = seller || variant === "valuation";
   /* Prefilled, because the point of the reference is that the buyer never has
      to describe which property they mean — composed in lib/whatsapp.ts, the
      same place the mobile contact bar reads. */
   const waHref = whatsappHref(reference, listingUrl);
 
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  /* Two places an error can belong: beside the fields it is about (the
+     contact-detail rule) or beside the button (the send itself). */
+  const [contactError, setContactError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sentRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
+  const emailRef = useRef<HTMLInputElement | null>(null);
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
 
   /* Submitting blurs the button the browser was focused on, and the form it
@@ -108,14 +129,20 @@ export function EnquiryForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setContactError(null);
     const form = new FormData(e.currentTarget);
-    /* The route refuses this with a 400, which the visitor currently discovers
-       only after pressing Send and waiting. The server keeps its check — this
-       one is about not wasting their time. */
-    const hasEmail = String(form.get("email") ?? "").trim() !== "";
-    const hasPhone = String(form.get("phone") ?? "").trim() !== "";
-    if (!hasEmail && !hasPhone) {
-      setError("Please leave an email address or a phone number so we can reply.");
+    /* The route refuses this with a 400, which the visitor would otherwise
+       discover only after pressing Send and waiting. The server keeps its
+       check — this one is about not wasting their time, and about putting
+       the message where the problem is: under email and phone, with focus
+       on the first of them. */
+    const missing = contactDetailError({
+      email: String(form.get("email") ?? ""),
+      phone: String(form.get("phone") ?? ""),
+    });
+    if (missing) {
+      setContactError(missing);
+      emailRef.current?.focus();
       return;
     }
     setState("sending");
@@ -209,19 +236,48 @@ export function EnquiryForm({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <label className="sm:col-span-2">
-          <span className="mb-1 block text-sm text-ink-2">Your name</span>
+          <span className="mb-1 block text-sm text-ink-2">
+            Your name <span className="text-ink-3">(required)</span>
+          </span>
           <input ref={nameRef} name="name" required maxLength={200} className={field} autoComplete="name" />
         </label>
         <label>
           <span className="mb-1 block text-sm text-ink-2">Email</span>
-          <input name="email" type="email" maxLength={320} className={field} autoComplete="email" />
+          <input
+            ref={emailRef}
+            name="email"
+            type="email"
+            maxLength={320}
+            className={field}
+            autoComplete="email"
+            aria-describedby="contact-note contact-error"
+            aria-invalid={contactError ? true : undefined}
+          />
         </label>
         <label>
           <span className="mb-1 block text-sm text-ink-2">Phone</span>
           {/* type and inputMode together: the telephone keyboard on a phone,
               and no validation the route does not already do. */}
-          <input name="phone" type="tel" inputMode="tel" maxLength={40} className={field} autoComplete="tel" />
+          <input
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            maxLength={40}
+            className={field}
+            autoComplete="tel"
+            aria-describedby="contact-note contact-error"
+            aria-invalid={contactError ? true : undefined}
+          />
         </label>
+        {contactError ? (
+          <p id="contact-error" role="alert" className="sm:col-span-2 -mt-1 border-l-2 border-red-700 pl-3 text-sm text-red-800">
+            {contactError}
+          </p>
+        ) : (
+          <p id="contact-note" className="sm:col-span-2 -mt-1 text-sm text-ink-3">
+            Email or phone — one is required, so we can reply.
+          </p>
+        )}
         {reference ? (
           <div className="sm:col-span-2" role="group" aria-label="Common requests">
             <p className="mb-1.5 text-sm text-ink-2">Tap to add to your message</p>
@@ -247,18 +303,19 @@ export function EnquiryForm({
             ref={messageRef}
             name="message"
             rows={4}
-            maxLength={messageBudget(variant ?? null)}
+            maxLength={messageBudget(whereAndWhat ? "seller" : buyer ? "buyer" : null)}
             className="w-full border border-line-strong bg-surface p-3 text-base text-ink placeholder:text-ink-3 focus:border-accent sm:text-sm"
           />
         </label>
       </div>
 
-      {seller ? (
+      {whereAndWhat ? (
         <fieldset className="mt-6 border-t border-line pt-5">
           <legend className="text-sm font-medium text-ink">About the property</legend>
           <p className="mt-1 text-sm text-ink-3">
-            Every one of these is optional. Tell us what you know and leave the rest — we
-            will ask about anything that matters.
+            {seller
+              ? "Every one of these is optional. Tell us what you know and leave the rest — we will ask about anything that matters."
+              : "All three are optional. Even a rough answer tells us where to start."}
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -302,6 +359,8 @@ export function EnquiryForm({
                 ))}
               </select>
             </label>
+            {seller ? (
+              <>
             <label>
               <span className="mb-1 block text-sm text-ink-2">Bedrooms</span>
               <input name="bedrooms" maxLength={20} className={field} inputMode="numeric" />
@@ -351,6 +410,8 @@ export function EnquiryForm({
                 ))}
               </select>
             </label>
+              </>
+            ) : null}
           </div>
         </fieldset>
       ) : null}

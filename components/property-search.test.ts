@@ -114,6 +114,15 @@ describe("the server HTML always carries the whole book", () => {
     expect(html.indexOf('name="sort"')).toBeLessThan(html.indexOf("<article"));
   });
 
+  it("keeps the sort row on one line on a phone: the label does not wrap and the select is as wide as its words", () => {
+    // Second pass: "Sort by" broke onto two lines beside a full-width select.
+    const html = render("");
+    expect(html).toMatch(/<label[^>]*for="sort"[^>]*class="[^"]*\bwhitespace-nowrap\b/);
+    const sort = /<select[^>]*name="sort"[^>]*class="([^"]*)"/.exec(html)!;
+    expect(sort[1]).toMatch(/\bw-auto\b/);
+    expect(sort[1]).not.toMatch(/\bw-full\b/);
+  });
+
   it("does not reach for useSearchParams or a Suspense boundary — that is what emptied the HTML", () => {
     // A call or an import, not the word: the component's own comment names the
     // hook to say why it is avoided, and a guard that trips on its explanation

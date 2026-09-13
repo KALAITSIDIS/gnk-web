@@ -43,7 +43,10 @@ export function ListingContactBar({
 
   return (
     <div
-      className="sticky bottom-0 z-40 border-t border-line bg-surface lg:hidden"
+      // [@media(max-height:500px)]: a phone held sideways. At 844 × 390 the
+      // header and this bar together left 280 px of page (second pass,
+      // 2026-09-13); the form is a swipe away and the header keeps the number.
+      className="sticky bottom-0 z-40 border-t border-line bg-surface lg:hidden [@media(max-height:500px)]:hidden"
       // clears the home indicator on a notched phone
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >

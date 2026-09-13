@@ -48,6 +48,19 @@ describe("the type floor", () => {
     expect(Number(size![1])).toBeGreaterThanOrEqual(0.75);
   });
 
+  it("every filled or outlined call to action is at least 44 px tall", () => {
+    // Second pass: "How we work" was py-2.5, 42 px; every other CTA is py-3.
+    for (const file of files) {
+      const src = readFileSync(file, "utf-8");
+      for (const m of src.matchAll(/className="([^"]*)"/g)) {
+        const cls = m[1]!;
+        const cta = /\bbg-accent\b/.test(cls) || /\bborder-accent\b/.test(cls);
+        const button = /\bpx-[4-8]\b/.test(cls);
+        if (cta && button) expect(cls, `${file}: ${cls}`).toMatch(/\bpy-3\b|\bpy-3\.5\b|\bmin-h-11\b/);
+      }
+    }
+  });
+
   it("small print in the lightest ink is never smaller than 14 px", () => {
     // `text-xs text-ink-3` is what a footnote looked like: the smallest size
     // in the palest colour, on the sentence about tax.

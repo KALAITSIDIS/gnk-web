@@ -74,7 +74,7 @@ export default async function HomePage() {
             </p>
             <Link
               href="/services"
-              className="mt-6 inline-block border border-accent px-5 py-2.5 text-sm font-medium text-accent hover:bg-accent-soft"
+              className="mt-6 inline-block border border-accent px-5 py-3 text-sm font-medium text-accent hover:bg-accent-soft"
             >
               How we work
             </Link>

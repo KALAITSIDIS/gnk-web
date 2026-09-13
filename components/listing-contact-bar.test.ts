@@ -40,6 +40,11 @@ describe("the listing contact bar", () => {
     expect(rendered, "the bar must follow the article's closing tag").toBeGreaterThan(article);
   });
 
+  it("steps aside on a phone held sideways", () => {
+    // Second pass: at 844 × 390 the header and this bar left 280 px of page.
+    expect(bar).toMatch(/\[@media\(max-height:500px\)\]:hidden/);
+  });
+
   it("is the only element that knows its own height", () => {
     // A bottom padding on the article is a copy of the bar's height — the
     // thing that guarded the wrong end of the page.
