@@ -61,16 +61,19 @@ describe("README's configuration table is the code's, not a copy of it", () => {
     expect(rowsInReadme()).toEqual(code);
   });
 
-  it("proves the site reads no credential but the one README names", () => {
-    // README § "It holds one secret, and that secret grants nothing" — a
-    // promise this scan keeps. CRM_FORWARD_KEY is the one allowed: it proves
-    // to the CRM that an enquiry came through this site and nothing more.
-    // Anything else secret-shaped is the thing the section forbids.
-    const THE_ONE = "CRM_FORWARD_KEY | lib/crm.ts | ";
+  it("proves the site reads no credential but the two README names", () => {
+    // README § "It holds two secrets, and neither grants anything" — a
+    // promise this scan keeps. CRM_FORWARD_KEY proves to the CRM that a
+    // request came through this site, so the CRM meters the site on its own
+    // budgets; SITE_REVALIDATE_KEY proves to this site that a revalidate
+    // knock came from the CRM, so a page is rebuilt a little sooner. Neither
+    // reads or opens anything. Anything else secret-shaped is the thing the
+    // section forbids.
+    const THE_TWO = ["CRM_FORWARD_KEY | lib/crm.ts | ", "SITE_REVALIDATE_KEY | lib/revalidate.ts | "];
     const reads = readsInCode();
-    expect(reads, "the one secret is read where README says").toContain(THE_ONE);
+    for (const one of THE_TWO) expect(reads, "each secret is read where README says").toContain(one);
     for (const read of reads) {
-      if (read === THE_ONE) continue;
+      if (THE_TWO.includes(read)) continue;
       expect(read).not.toMatch(/SUPABASE|SERVICE_ROLE|SECRET|TOKEN|KEY/);
     }
   });
