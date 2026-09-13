@@ -170,13 +170,18 @@ export const site = {
  */
 export const ENQUIRY_RETENTION_MONTHS = 24;
 
+/* `primary` marks the two items that are conversions rather than reading:
+   Properties is where a buyer goes, Valuation is where a seller goes. The
+   header and the phone menu set them heavier; the footer lists everything
+   alike. One flag here, so the two navs cannot disagree (audit 2026-09-13:
+   six equal items, no primary). */
 export const nav = [
-  { href: "/properties", label: "Properties" },
+  { href: "/properties", label: "Properties", primary: true },
   // An owner deciding who to instruct had no route in: every other item here
   // addresses a buyer. Mandates are the revenue.
-  { href: "/selling", label: "Selling" },
-  { href: "/services", label: "Advisory" },
-  { href: "/valuation", label: "Valuation" },
-  { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
+  { href: "/selling", label: "Selling", primary: false },
+  { href: "/services", label: "Advisory", primary: false },
+  { href: "/valuation", label: "Valuation", primary: true },
+  { href: "/about", label: "About", primary: false },
+  { href: "/contact", label: "Contact", primary: false },
 ] as const;

@@ -13,6 +13,7 @@ import {
   matchesMaxPrice,
   parseSearchState,
   priceStepsFor,
+  resultCols,
   resultCountLabel,
   salePrice,
   serializeSearchState,
@@ -51,13 +52,18 @@ import { PropertyCard } from "@/components/property-card";
  * controls to it. A chip row names what is filtering and lets each filter be
  * removed alone, or all at once.
  *
- * ON A PHONE the search box stays and everything else folds behind one
- * "Filters & sort" row. Measured on an iPhone 13 viewport (2026-09-13): five
+ * ON A PHONE the search box stays and every filter folds behind one
+ * "Filters" row. Measured on an iPhone 13 viewport (2026-09-13): five
  * stacked controls made a 302 px block, and with the header and the hero
  * above it the first property card began at 819 px on a 664 px screen. The
  * fold is a JavaScript toggle, which is honest about what this component is:
  * the filtering itself needs JavaScript, and without it the page is the
  * whole book either way.
+ *
+ * THE SORT IS NOT A FILTER. It sat in the bar as a sixth control and read as
+ * one (audit 2026-09-13). A filter changes what is shown; a sort changes the
+ * order of what is shown, so it sits with the results, in its own row above
+ * the grid, with a visible label.
  */
 const SORT_LABELS: Record<Sort, string> = {
   newest: "Newest first",
@@ -87,7 +93,6 @@ const BAR_COLS: Record<number, string> = {
   3: "sm:grid-cols-3",
   5: "sm:grid-cols-2 lg:grid-cols-5",
   6: "sm:grid-cols-2 lg:grid-cols-6",
-  7: "sm:grid-cols-2 lg:grid-cols-7",
 };
 
 export function PropertySearch({
@@ -208,26 +213,17 @@ export function PropertySearch({
   /* What the folded controls are doing right now, for the toggle's label —
      the search box is always visible, so its chip does not count here. */
   const foldedActive = chips.filter((c) => c.key !== "q").length;
-  /* One card in a three-column grid floats in dead space. A small portfolio
-     gets a layout built for its size instead — which reads as deliberate,
-     where a mostly-empty grid reads as a business with nothing to sell. */
-  const resultCols =
-    results.length === 1
-      ? "md:grid-cols-[minmax(0,32rem)]"
-      : results.length === 2
-        ? "sm:grid-cols-2"
-        : "sm:grid-cols-2 xl:grid-cols-3";
-  /* How many controls will actually render. A four-column bar holding one
-     input leaves three empty columns, which says "we have nothing" as loudly
-     as a result count would. The bar sizes itself to what it contains. */
+  /* How many controls will actually render in the bar. A four-column bar
+     holding one input leaves three empty columns, which says "we have
+     nothing" as loudly as a result count would. The bar sizes itself to what
+     it contains. The sort is not counted: it lives with the results. */
   const showSort = prices.length > 1;
   const controls =
     1 +
     (types.length > 1 ? 1 : 0) +
     (areas.length > 1 ? 1 : 0) +
     (bedOptions.length > 1 ? 1 : 0) +
-    (priceSteps.length > 0 ? 1 : 0) +
-    (showSort ? 1 : 0);
+    (priceSteps.length > 0 ? 1 : 0);
   const barCols = BAR_COLS[controls >= 4 ? controls + 1 : controls] ?? "";
   /* 16 px on a phone: Safari zooms the page into any field set smaller when
      it is focused, and every field here was 14 (measured 2026-09-13). */
@@ -261,7 +257,7 @@ export function PropertySearch({
             aria-controls="search-filters"
             className="flex min-h-11 items-center justify-between gap-3 border border-line-strong bg-surface px-3 text-base text-ink sm:hidden"
           >
-            <span>{showFilters ? "Hide filters" : "Filters & sort"}</span>
+            <span>{showFilters ? "Hide filters" : "Filters"}</span>
             {foldedActive > 0 ? (
               <span className="text-sm text-accent tabular-nums">{foldedActive} active</span>
             ) : (
@@ -331,19 +327,6 @@ export function PropertySearch({
               </select>
             </label>
           ) : null}
-
-          {showSort ? (
-            <label>
-              <span className="sr-only">Sort by</span>
-              <select name="sort" value={s.sort} onChange={(e) => set("sort", e.target.value as Sort)} className={field}>
-                {SORTS.map((o) => (
-                  <option key={o} value={o}>
-                    {SORT_LABELS[o]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
         </div>
       </div>
 
@@ -376,8 +359,29 @@ export function PropertySearch({
         </div>
       ) : null}
 
+      {showSort ? (
+        <div className="mt-8 flex items-center justify-end gap-3 text-sm">
+          <label htmlFor="sort" className="text-ink-3">
+            Sort by
+          </label>
+          <select
+            id="sort"
+            name="sort"
+            value={s.sort}
+            onChange={(e) => set("sort", e.target.value as Sort)}
+            className={`${field} sm:w-auto`}
+          >
+            {SORTS.map((o) => (
+              <option key={o} value={o}>
+                {SORT_LABELS[o]}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+
       {results.length > 0 ? (
-        <div className={`mt-8 grid gap-6 ${resultCols}`}>
+        <div className={`${showSort ? "mt-4" : "mt-8"} grid gap-6 ${resultCols(results.length)}`}>
           {results.map((l, i) => (
             <PropertyCard key={l.reference} listing={l} priority={i < 3} />
           ))}

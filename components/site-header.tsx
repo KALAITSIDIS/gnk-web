@@ -35,12 +35,16 @@ export function SiteHeader() {
           <span className="eyebrow mt-1">Paphos, Cyprus</span>
         </Link>
 
+        {/* The two conversions (lib/site.ts `primary`) are set in the full
+            ink at medium weight; the four reading items stay lighter. */}
         <nav aria-label="Main" className="ml-auto hidden items-center gap-5 md:flex">
           {nav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="inline-flex min-h-11 items-center px-1 text-sm text-ink-2 transition-colors hover:text-accent"
+              className={`inline-flex min-h-11 items-center px-1 text-sm transition-colors hover:text-accent ${
+                item.primary ? "font-medium text-ink" : "text-ink-2"
+              }`}
             >
               {item.label}
             </Link>
@@ -84,7 +88,9 @@ export function SiteHeader() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="flex min-h-11 items-center text-base text-ink-2 hover:text-accent"
+                    className={`flex min-h-11 items-center text-base hover:text-accent ${
+                      item.primary ? "font-medium text-ink" : "text-ink-2"
+                    }`}
                   >
                     {item.label}
                   </Link>

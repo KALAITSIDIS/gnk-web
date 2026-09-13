@@ -79,6 +79,33 @@ describe("the site header on a phone", () => {
   });
 });
 
+describe("the two items that are conversions carry weight", () => {
+  /* Audit 2026-09-13: six equal items, no primary. Properties is where a
+     buyer goes and Valuation is where a seller goes; the other four are
+     reading. The flag lives in lib/site.ts so the header and the phone menu
+     read one definition. */
+  const primary = nav.filter((i) => i.primary).map((i) => i.href);
+  const secondary = nav.filter((i) => !i.primary).map((i) => i.href);
+
+  it("are Properties and Valuation, and only those", () => {
+    expect(primary).toEqual(["/properties", "/valuation"]);
+    expect(secondary).toHaveLength(nav.length - 2);
+  });
+
+  it("are set heavier than the rest in both the desktop nav and the phone menu", () => {
+    for (const href of primary) {
+      const links = [...html.matchAll(new RegExp(`<a href="${href}" class="([^"]*)"`, "g"))].map((m) => m[1]!);
+      expect(links.length, href).toBe(2);
+      for (const cls of links) expect(cls, `${href}: ${cls}`).toMatch(/\bfont-medium\b/);
+    }
+    for (const href of secondary) {
+      for (const m of html.matchAll(new RegExp(`<a href="${href}" class="([^"]*)"`, "g"))) {
+        expect(m[1], `${href}: ${m[1]}`).not.toMatch(/\bfont-medium\b/);
+      }
+    }
+  });
+});
+
 describe("what a sticky header asks of the rest of the page", () => {
   const css = readFileSync(join(root, "app", "globals.css"), "utf-8");
   const listing = readFileSync(join(root, "app", "properties", "[reference]", "page.tsx"), "utf-8");
