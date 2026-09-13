@@ -80,10 +80,14 @@ for 60 seconds: the CRM's edge keeps a feed body for `max-age=60`
 `FEED_REVALIDATE` seconds (`lib/crm.ts`), and each page is ISR with
 `revalidate = 60`. Under steady traffic a change therefore shows within
 about three minutes. On a quiet site the first visitor after a lull is
-served the last render, however old — 5 h 20 min was observed on
-2026-09-06 — and their visit triggers the rebuild the next visitor sees.
-`lib/freshness.test.ts` holds the numbers in this paragraph to the constants;
-the CRM's `max-age` is pinned by its own route test.
+served the last render while a fresh one is built — but for at most one
+hour past its sixty seconds (`expireTime = 3600` in `next.config.ts`);
+older than that, the visitor waits for the fresh render. Until 2026-09-13
+that ceiling was Next's default of a year, and the home page was measured
+serving a five-day-old render. `lib/freshness.test.ts` holds the numbers in
+this paragraph to the constants; the CRM's `max-age` is pinned by its own
+route test. The site's functions run in `fra1`, beside the CRM and the
+database (`vercel.json`), so a fresh render does not cross the Atlantic.
 
 ## Related
 
