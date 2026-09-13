@@ -161,6 +161,15 @@ export const site = {
   ],
 } as const;
 
+/**
+ * How long an enquiry that leads nowhere is kept, in months. The CRM's nightly
+ * sweep (gnk-crm 0092, redact_stale_enquiries) erases the message once a
+ * website enquiry with no linked contact is this old; the privacy page states
+ * this number and app/legal/page.test.ts holds the two together. The CRM
+ * pins its own copy at apply time. Change both or neither.
+ */
+export const ENQUIRY_RETENTION_MONTHS = 24;
+
 export const nav = [
   { href: "/properties", label: "Properties" },
   // An owner deciding who to instruct had no route in: every other item here

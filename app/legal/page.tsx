@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/site-url";
-import { site } from "@/lib/site";
+import { ENQUIRY_RETENTION_MONTHS, site } from "@/lib/site";
 
 export const metadata: Metadata = {
   ...pageMeta("/legal"),
@@ -110,10 +110,11 @@ export default function LegalPage() {
       <section className="mt-10">
         <h2 className="text-2xl">How long we keep it</h2>
         <p className="mt-3 text-ink-2">
-          If your enquiry does not lead to us working together, we delete it within two
-          years. If it does, we keep the file for as long as the law requires us to — anti
-          money-laundering rules oblige us to retain client records for a period after a
-          relationship ends.
+          If your enquiry does not lead to us working together, what you sent is erased
+          automatically once it is {ENQUIRY_RETENTION_MONTHS} months old — nobody has to
+          remember to do it. If it does, we keep the file for as long as the law requires
+          us to — anti money-laundering rules oblige us to retain client records for a
+          period after a relationship ends.
         </p>
       </section>
 
