@@ -88,6 +88,31 @@ export function areasWithFeed(
   return out;
 }
 
+/**
+ * The three things a listing's enquiry form invites — "arrange a viewing,
+ * ask for the full cost model, or get our written view on the price" — as
+ * one-tap openers for the message. On a phone the form sits some 2,000 px
+ * down the page (measured 2026-09-13) and each of these still had to be
+ * typed; a tap now writes the sentence, with the reference in it so the
+ * desk never has to ask which property. The message stays the visitor's
+ * own text: nothing structured is added to the enquiry, and the route
+ * needs no new field.
+ */
+export const INTENTS: readonly { label: string; message: (reference: string) => string }[] = [
+  {
+    label: "Arrange a viewing",
+    message: (reference) => `I would like to arrange a viewing of ${reference}.`,
+  },
+  {
+    label: "Send the full cost model",
+    message: (reference) => `Please send me the full acquisition cost model for ${reference}.`,
+  },
+  {
+    label: "Your view on the price",
+    message: (reference) => `What is your written view on the asking price of ${reference}?`,
+  },
+];
+
 export const TIMINGS = [
   { value: "now", label: "Ready to sell now" },
   { value: "3_months", label: "Within about three months" },

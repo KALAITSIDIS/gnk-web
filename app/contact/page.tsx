@@ -76,14 +76,10 @@ export default function ContactPage() {
               <dd className="text-right text-ink-2">{site.contact.hours}</dd>
             </div>
           </dl>
-
-          {!site.contact.street ? (
-            <p className="mt-4 text-xs text-ink-3">
-              {/* TODO: street address, once confirmed — every credible firm in this
-                  market publishes one, and its absence is noticed. */}
-              Full office address to follow.
-            </p>
-          ) : null}
+          {/* No "address to follow" line. The Office row says what is true
+              (the city); the street appears the day lib/site.ts holds it,
+              and a sentence promising it is a placeholder published as
+              content. app/placeholders.test.ts. */}
         </div>
 
         <EnquiryForm

@@ -1,5 +1,5 @@
 import type { Listing } from "@/lib/crm";
-import { bedroomsOf, isContainer, label, moneyShort, pricing } from "@/lib/format";
+import { bedroomsOf, isContainer, label, moneyShort, pricing, text } from "@/lib/format";
 
 /**
  * The price ladder offered in the search bar.
@@ -97,7 +97,47 @@ export function matchesMaxPrice(l: Listing, maxPrice: string): boolean {
 }
 
 /**
- * The search bar's state, as it lives in the URL: `?q&type&beds&max&sort`.
+ * The areas the bar may offer, and the test a listing has to pass when one
+ * is chosen.
+ *
+ * Built from the feed like the type list: an area is an option only because
+ * a published listing is filed under it, so every option can return
+ * something, and the control renders only when there is more than one
+ * (2026-09-13 audit: "a buyer wanting only Kato Paphos has to type it").
+ * The value is the feed's own English text — "Peyia / Coral Bay" — which is
+ * also what the URL carries, so a shared link reads as a place name.
+ */
+export function areaOptionsFor(listings: readonly Listing[]): string[] {
+  const seen = new Set<string>();
+  for (const l of listings) {
+    const a = text(l.area);
+    if (a) seen.add(a);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+/** Whether a listing is filed under an area; "" means no filter. Case does not matter: the URL is typed by people. */
+export function matchesArea(l: Listing, area: string): boolean {
+  if (!area) return true;
+  return text(l.area).toLowerCase() === area.toLowerCase();
+}
+
+/**
+ * What the chip row says while a filter is on: "2 listings match".
+ *
+ * Only while filtering. The unfiltered book carries no count on purpose —
+ * Aristo's "All Properties (273)" is honest at 273 and brutal at four — but
+ * a person who has just chosen a filter and watched the grid change under
+ * them needs to be told what happened, and "match" counts what the filter
+ * did rather than what the firm holds. "Listings", because a plot of land
+ * and a development are on the book beside the villas.
+ */
+export function resultCountLabel(n: number): string {
+  return n === 1 ? "1 listing matches" : `${n} listings match`;
+}
+
+/**
+ * The search bar's state, as it lives in the URL: `?q&type&area&beds&max&sort`.
  *
  * It lived in React alone until 2026-09-13, so a filtered view could not be
  * linked, bookmarked, restored on reload, reached with the back button or
@@ -114,19 +154,23 @@ export type Sort = (typeof SORTS)[number];
 export interface SearchState {
   q: string;
   type: string;
+  area: string;
   beds: string;
   max: string;
   sort: Sort;
 }
 
-export const DEFAULT_SEARCH: SearchState = { q: "", type: "", beds: "", max: "", sort: "newest" };
+export const DEFAULT_SEARCH: SearchState = { q: "", type: "", area: "", beds: "", max: "", sort: "newest" };
 
 /** Free text is capped where the input is: long enough for a place, short enough to be a search. */
 const Q_MAX = 120;
+/** An area is a place name as the CRM spells it: letters in any script, digits, and the punctuation of "Peyia / Coral Bay" or "Tala / Tsada". */
+const AREA_SHAPE = /^[\p{L}\p{N} \/'’.,()-]{1,80}$/u;
 
 export function parseSearchState(params: { get(name: string): string | null }): SearchState {
   const q = (params.get("q") ?? "").trim().slice(0, Q_MAX);
   const type = (params.get("type") ?? "").trim();
+  const area = (params.get("area") ?? "").trim();
   const beds = (params.get("beds") ?? "").trim();
   const max = (params.get("max") ?? "").trim();
   const sort = (params.get("sort") ?? "").trim();
@@ -134,6 +178,7 @@ export function parseSearchState(params: { get(name: string): string | null }): 
     q,
     // the CRM's enum shape: lowercase words and underscores
     type: /^[a-z_]{1,32}$/.test(type) ? type : "",
+    area: AREA_SHAPE.test(area) ? area : "",
     beds: /^[1-9]$/.test(beds) ? beds : "",
     max: /^[1-9]\d{3,8}$/.test(max) ? max : "",
     sort: (SORTS as readonly string[]).includes(sort) ? (sort as Sort) : "newest",
@@ -144,6 +189,7 @@ export function serializeSearchState(s: SearchState): string {
   const p = new URLSearchParams();
   if (s.q) p.set("q", s.q);
   if (s.type) p.set("type", s.type);
+  if (s.area) p.set("area", s.area);
   if (s.beds) p.set("beds", s.beds);
   if (s.max) p.set("max", s.max);
   if (s.sort !== "newest") p.set("sort", s.sort);
@@ -172,6 +218,7 @@ export function activeFilters(s: SearchState): Array<{ key: keyof SearchState; l
   const chips: Array<{ key: keyof SearchState; label: string }> = [];
   if (s.q) chips.push({ key: "q", label: `“${s.q}”` });
   if (s.type) chips.push({ key: "type", label: label(s.type) });
+  if (s.area) chips.push({ key: "area", label: s.area });
   if (s.beds) chips.push({ key: "beds", label: `${s.beds}+ bedrooms` });
   if (s.max) chips.push({ key: "max", label: `Up to ${moneyShort(Number(s.max))}` });
   return chips;

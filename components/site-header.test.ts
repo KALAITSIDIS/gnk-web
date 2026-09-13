@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -6,19 +9,27 @@ import { nav, site } from "@/lib/site";
 /**
  * The header on a phone.
  *
- * Measured 2026-09-13 at 375 px: the mobile nav row was 462 px wide, so
- * "About" was cut and "Contact" — the primary call to action — started
- * off-screen behind a gradient that only hinted at the overflow (audit
- * WEB-02). Six short items do not need a hamburger and its JavaScript; they
- * need to be allowed to wrap. So: every item visible, nothing scrolling
- * sideways, no fade pretending to be a control, and the phone number kept in
- * the top row where a thumb reaches it.
+ * Two measurements, one day apart. 2026-09-13 morning at 375 px: the mobile
+ * nav row was 462 px wide, so "Contact" started off-screen behind a gradient
+ * (audit WEB-02); the fix let the six items wrap. 2026-09-13 evening on an
+ * iPhone 13 viewport (390 × 664): the wrapped header measured 143 px — a
+ * fifth of the screen — with every link 17 px tall, and the phone number
+ * left the screen on the first scroll. On the home page the first property
+ * sat at 819 px.
+ *
+ * So the six items now live behind a native <details> disclosure. That keeps
+ * the property the wrap was chosen for — the menu works before hydration and
+ * without JavaScript at all — while the header drops to one row, sticks to
+ * the top so the number is always a thumb away, and every link in it is a
+ * 44 px target. globals.css reserves scroll padding so an in-page anchor
+ * (the listing page's #enquire) is never hidden beneath it.
  */
 vi.mock("next/link", () => ({
   default: (props: { href: string; className?: string; children: unknown }) =>
     createElement("a", { href: props.href, className: props.className }, props.children as never),
 }));
 
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { SiteHeader } = await import("./site-header");
 const html = renderToStaticMarkup(createElement(SiteHeader));
 
@@ -34,21 +45,51 @@ describe("the site header on a phone", () => {
     for (const item of nav) expect(m).toContain(`>${item.label}<`);
   });
 
-  it("wraps instead of scrolling sideways", () => {
-    const m = mobileNav();
-    expect(m).toMatch(/class="[^"]*\bflex-wrap\b/);
+  it("puts the phone menu behind a native disclosure that needs no JavaScript", () => {
+    const details = /<details[^>]*>\s*<summary[^>]*>[\s\S]*?<\/summary>[\s\S]*?<\/details>/.exec(html);
+    expect(details, "a <details> with a <summary> is rendered").not.toBeNull();
+    expect(details![0]).toContain('aria-label="Main, mobile"');
+    expect(details![0]).toMatch(/<summary[^>]*>[\s\S]*Menu/);
+    expect(details![0]).toMatch(/<details class="[^"]*\bmd:hidden\b/);
+  });
+
+  it("never scrolls sideways and never hides an item behind a fade", () => {
     expect(html).not.toMatch(/overflow-x-auto/);
     expect(html).not.toMatch(/bg-gradient-to-l/);
   });
 
-  it("keeps the phone number in the top row", () => {
-    const topRow = html.slice(0, html.indexOf("<nav aria-label=\"Main, mobile\""));
+  it("keeps the phone number in the top row, before the menu", () => {
+    const topRow = html.slice(0, html.indexOf("<details"));
     expect(topRow).toContain(`href="${site.contact.phoneHref}"`);
     expect(topRow).toContain(site.contact.phone);
   });
 
-  it("hides the phone nav on wider screens where the desktop nav takes over", () => {
-    expect(mobileNav()).toMatch(/class="[^"]*\bmd:hidden\b/);
+  it("sticks to the top of the viewport", () => {
+    expect(html).toMatch(/<header class="[^"]*\bsticky\b[^"]*\btop-0\b/);
+  });
+
+  it("makes every link and the menu control a 44 px target", () => {
+    const controls = [...html.matchAll(/<(?:a|summary) [^>]*class="([^"]*)"/g)].map((m) => m[1]!);
+    expect(controls.length).toBeGreaterThanOrEqual(nav.length * 2 + 2);
+    for (const cls of controls) expect(cls, cls).toMatch(/\bmin-h-11\b/);
+  });
+
+  it("hides the phone menu where the desktop nav takes over", () => {
     expect(html).toMatch(/<nav aria-label="Main" class="[^"]*\bmd:flex\b/);
+  });
+});
+
+describe("what a sticky header asks of the rest of the page", () => {
+  const css = readFileSync(join(root, "app", "globals.css"), "utf-8");
+  const listing = readFileSync(join(root, "app", "properties", "[reference]", "page.tsx"), "utf-8");
+
+  it("globals.css reserves scroll padding, so an anchor target is not hidden beneath the header", () => {
+    expect(css).toMatch(/scroll-padding-top:\s*[4-6]rem/);
+  });
+
+  it("the listing page's pinned enquiry column starts below the header, not under it", () => {
+    // lg:top-8 would slide the card beneath a sticky header on every scroll.
+    expect(listing).toMatch(/id="enquire"[^>]*className="[^"]*\blg:top-2[0-9]\b/);
+    expect(listing).not.toMatch(/\blg:top-8\b/);
   });
 });

@@ -17,11 +17,17 @@ export const metadata: Metadata = {
  * nobody, the developers have no team page. Two named people with real
  * histories is an unoccupied position.
  *
- * Everything not yet supplied renders as a visible gap. Nothing here invents a
- * biography, a year, or a credential.
+ * Nothing here invents a biography, a year, or a credential. What is not yet
+ * supplied is not drawn either: a card reading "Name to follow" under "The
+ * principals" is a placeholder published as content, and to the sceptical
+ * reader this page is for it reads as evasion (measured live, 2026-09-13).
+ * A principal appears the day lib/site.ts carries a name; until both do, one
+ * sentence says the section is being completed and gives the number.
+ * app/placeholders.test.ts holds this for every page.
  */
 export default function AboutPage() {
-  const bioMissing = site.principals.some((p) => !p.bio);
+  const principals = site.principals.filter((p) => p.name);
+  const incomplete = site.principals.some((p) => !p.name || !p.bio);
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
@@ -41,47 +47,36 @@ export default function AboutPage() {
           You will deal with one of these two people from first conversation to completion.
         </p>
 
-        <div className="mt-8 grid gap-8 md:grid-cols-2">
-          {site.principals.map((p, i) => (
-            <div key={i} className="border border-line bg-surface p-7">
-              {p.photo ? null : (
-                <div className="placeholder flex h-56 items-center justify-center text-sm">
-                  Photograph to follow
-                </div>
-              )}
-              <h3 className="mt-5 font-display text-2xl text-ink">
-                {p.name ?? <span className="italic text-ink-3">Name to follow</span>}
-              </h3>
-              {p.role ? <p className="text-sm text-ink-3">{p.role}</p> : null}
-              <p className="mt-4 text-ink-2">
-                {p.bio ?? (
-                  <span className="italic text-ink-3">
-                    Background, prior experience and qualifications to follow.
-                  </span>
-                )}
-              </p>
-              {p.phone || p.email ? (
-                <p className="mt-4 text-sm">
-                  {p.phone ? (
-                    <a href={`tel:${p.phone}`} className="text-accent hover:underline">
-                      {p.phone}
-                    </a>
-                  ) : null}
-                  {p.phone && p.email ? <span className="text-ink-3"> · </span> : null}
-                  {p.email ? (
-                    <a href={`mailto:${p.email}`} className="text-accent hover:underline">
-                      {p.email}
-                    </a>
-                  ) : null}
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        {principals.length > 0 ? (
+          <div className="mt-8 grid gap-8 md:grid-cols-2">
+            {principals.map((p) => (
+              <div key={p.name} className="border border-line bg-surface p-7">
+                <h3 className="font-display text-2xl text-ink">{p.name}</h3>
+                {p.role ? <p className="text-sm text-ink-3">{p.role}</p> : null}
+                {p.bio ? <p className="mt-4 text-ink-2">{p.bio}</p> : null}
+                {p.phone || p.email ? (
+                  <p className="mt-4 text-sm">
+                    {p.phone ? (
+                      <a href={`tel:${p.phone}`} className="text-accent hover:underline">
+                        {p.phone}
+                      </a>
+                    ) : null}
+                    {p.phone && p.email ? <span className="text-ink-3"> · </span> : null}
+                    {p.email ? (
+                      <a href={`mailto:${p.email}`} className="text-accent hover:underline">
+                        {p.email}
+                      </a>
+                    ) : null}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-        {bioMissing ? (
-          <p className="mt-5 text-xs text-ink-3">
-            This page is being completed. Until then, reach either of us on{" "}
+        {incomplete ? (
+          <p className="mt-5 max-w-2xl text-sm text-ink-2">
+            This section is being completed. Until then, reach either of us on{" "}
             <a href={site.contact.phoneHref} className="text-accent hover:underline">
               {site.contact.phone}
             </a>

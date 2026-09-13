@@ -30,6 +30,15 @@ import {
  *
  * Sized large on purpose: four cards at this scale fill a screen properly,
  * where four thin MLS rows would advertise how few there are.
+ *
+ * ONE TARGET. Measured on the live site 2026-09-13: the price and the place
+ * line — the two things a buyer's eye lands on — did nothing when clicked;
+ * the links were the photograph and a 20 px "full detail" line at the
+ * bottom. The price is now the card's one link, stretched over the whole
+ * card by a pseudo-element, and it carries the place line in its accessible
+ * name so a screen reader hears what the figure is for. The row at the
+ * bottom is the visible affordance; the reference stays there for the
+ * person who phones and reads it out. components/property-card.test.ts.
  */
 export function PropertyCard({ listing, priority = false }: { listing: Listing; priority?: boolean }) {
   const cover = coverImage(listing);
@@ -51,8 +60,8 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
   const specs = cardSpecs(listing);
 
   return (
-    <article className="group flex flex-col overflow-hidden border border-line bg-surface transition-colors hover:border-line-2">
-      <Link href={`/properties/${listing.reference}`} className="relative block aspect-[4/3] overflow-hidden bg-surface-2">
+    <article className="group relative flex flex-col overflow-hidden border border-line bg-surface transition-colors hover:border-accent focus-within:border-accent">
+      <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
         {cover?.card ? (
           <Image
             src={cover.card}
@@ -63,27 +72,37 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
             className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
-          <span className="placeholder absolute inset-0 flex items-center justify-center text-xs">
+          <span className="placeholder absolute inset-0 flex items-center justify-center text-sm">
             Photography to follow
           </span>
         )}
 
         {isProject ? (
-          <span className="absolute top-3 left-3 bg-ink/85 px-2.5 py-1 text-[11px] font-medium tracking-wide text-white uppercase">
+          <span className="absolute top-3 left-3 bg-ink/85 px-2.5 py-1 text-xs font-medium tracking-wide text-white uppercase">
             Development
           </span>
         ) : null}
 
         {photos > 1 ? (
-          <span className="absolute right-3 bottom-3 bg-ink/70 px-2 py-0.5 text-[11px] text-white tabular-nums">
+          <span className="absolute right-3 bottom-3 bg-ink/70 px-2 py-0.5 text-xs text-white tabular-nums">
             {photos} photos
           </span>
         ) : null}
-      </Link>
+      </div>
 
       <div className="flex flex-1 flex-col gap-2.5 p-5">
         <p className="font-display text-xl font-semibold text-ink tabular-nums">
-          {priceLabel(listing)}
+          {/* The pseudo-element is positioned against the article (relative
+              above), so this one anchor is the whole card's hit area. The
+              chips beneath stay plain spans; nothing else in the card is
+              interactive, so nothing is covered that a person would want. */}
+          <Link
+            href={`/properties/${listing.reference}`}
+            className="after:absolute after:inset-0 hover:text-accent"
+          >
+            {priceLabel(listing)}
+            <span className="sr-only">, {placeLine(listing)} — view property</span>
+          </Link>
         </p>
 
         {specs.length > 0 ? (
@@ -102,23 +121,21 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
 
         <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
           {deed ? (
-            <span className="border border-accent/30 bg-accent-soft px-2 py-0.5 text-[11px] text-accent">
+            <span className="border border-accent/30 bg-accent-soft px-2 py-0.5 text-xs text-accent">
               {deed}
             </span>
           ) : null}
           {(listing.features ?? []).slice(0, 3).map((f) => (
-            <span key={f} className="border border-line bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2">
+            <span key={f} className="border border-line bg-surface-2 px-2 py-0.5 text-xs text-ink-2">
               {label(f)}
             </span>
           ))}
         </div>
 
-        <Link
-          href={`/properties/${listing.reference}`}
-          className="mt-3 text-sm font-medium text-accent hover:text-accent-hover"
-        >
-          {listing.reference} — full detail →
-        </Link>
+        <p className="mt-3 flex min-h-11 items-center justify-between gap-3 border-t border-line pt-3 text-sm">
+          <span className="font-medium text-accent group-hover:text-accent-hover">View property →</span>
+          <span className="text-sm text-ink-3 tabular-nums">{listing.reference}</span>
+        </p>
       </div>
     </article>
   );

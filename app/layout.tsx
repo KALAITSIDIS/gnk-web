@@ -19,8 +19,20 @@ import { site } from "@/lib/site";
  * Naming a capable family is not enough — the subsets have to be asked for,
  * or the build ships Latin only. lib/type.test.ts pins this list, and
  * scripts/check-fonts.mjs checks the CSS the build actually emitted
- * (`postbuild`). Literata is variable with an optical-size axis, so display
- * sizes get the display cut without a second file.
+ * (`postbuild`).
+ *
+ * Literata is asked for as two STATIC instances, 500 and 600 — the only two
+ * weights the site sets in the display face (headings and prices at 500,
+ * the wordmark and a card's price at 600). It was requested as the variable
+ * font with its optical-size axis, and the Lighthouse baseline of
+ * 2026-09-13 put the mobile LCP at 4.3 s on the h1 — the element waiting
+ * for that file. Measured from Google Fonts the same day, the latin face
+ * alone: 110 KB variable with opsz, 52 KB variable without it, 22 KB as a
+ * static 500. The h1 now waits for the 22 KB file; the 600 arrives
+ * separately for the few places that use it. What is lost is the optical
+ * size: display sizes are set from the text cut rather than the display
+ * one, which is the trade the number justifies. lib/type.test.ts pins the
+ * two weights and forbids a heavier one in the display face.
  *
  * The subset list is written out twice because next/font reads these options
  * at build time and accepts only literals — a shared constant is rejected.
@@ -28,9 +40,9 @@ import { site } from "@/lib/site";
  */
 const literata = Literata({
   subsets: ["latin", "latin-ext", "greek", "cyrillic"],
+  weight: ["500", "600"],
   variable: "--font-literata",
   display: "swap",
-  axes: ["opsz"],
 });
 
 const interTight = Inter_Tight({
