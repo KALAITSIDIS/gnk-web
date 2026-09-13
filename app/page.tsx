@@ -4,6 +4,7 @@ import { getListings } from "@/lib/crm";
 import { OrganizationJsonLd } from "@/components/org-json-ld";
 import { pageMeta } from "@/lib/site-url";
 import { site } from "@/lib/site";
+import { Suspense } from "react";
 import { PropertySearch } from "@/components/property-search";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -41,7 +42,13 @@ export default async function HomePage() {
           <p className="mt-4 max-w-2xl text-lg text-ink-2">{site.positioning}</p>
 
           <div className="mt-9">
-            <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
+            {/* The search reads its state from the URL (useSearchParams), which a
+                prerendered page can only do inside a Suspense boundary; the
+                fallback is never seen, the boundary is what lets the page
+                stay static. */}
+            <Suspense fallback={null}>
+              <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
+            </Suspense>
           </div>
         </div>
       </section>

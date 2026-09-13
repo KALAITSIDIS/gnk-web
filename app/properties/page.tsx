@@ -4,6 +4,7 @@ import { getListings } from "@/lib/crm";
 import { areasWithFeed } from "@/lib/enquiry-fields";
 import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
+import { Suspense } from "react";
 import { PropertySearch } from "@/components/property-search";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -43,7 +44,13 @@ export default async function PropertiesPage() {
       </p>
 
       <div className="mt-10">
-        <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
+        {/* The search reads its state from the URL (useSearchParams), which a
+                prerendered page can only do inside a Suspense boundary; the
+                fallback is never seen, the boundary is what lets the page
+                stay static. */}
+            <Suspense fallback={null}>
+              <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
+            </Suspense>
       </div>
 
       {/* Below the results, not only inside the empty state. With a deliberately

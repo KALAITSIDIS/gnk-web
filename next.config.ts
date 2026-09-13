@@ -39,6 +39,22 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "DENY" },
+          // A nonce CSP was rejected for this ISR site: it forfeits the
+          // last-good-copy behaviour the listing page depends on, and hashes
+          // cannot cover Next's own chunks. These three directives touch no
+          // script and no cache: nobody may frame the site, a <base> cannot be
+          // injected, and a form may only post to this origin (the enquiry
+          // form does; WhatsApp is a link, not a form). lib/headers.test.ts.
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+          },
+          // The powerful features this site never asks for, denied so that
+          // no embedded or injected content can ask for them either.
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+          },
         ],
       },
     ];

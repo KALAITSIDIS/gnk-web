@@ -2,8 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Listing } from "@/lib/crm";
 import {
-  area,
-  bedroomsSpec,
+  cardSpecs,
   coverImage,
   deedLabel,
   isContainer,
@@ -44,18 +43,12 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
      living in two places. */
   const isProject = isContainer(listing);
 
-  /* A development's own beds/baths/area describe no dwelling for sale — the
-     units carry those. Showing them puts one villa's shape on a project that
-     contains six of a different shape. */
-  /* One function decides the chip, including that a studio says so — the card
-     held its own copy of that rule for a day, pinned by nothing. */
-  const specs = isProject
-    ? []
-    : [
-        bedroomsSpec(listing),
-        listing.bathrooms ? `${listing.bathrooms} bath` : null,
-        area(listing.covered_area_sqm),
-      ].filter(Boolean);
+  /* One function decides the line of measurements by what the thing IS: a
+     plot shows its plot area (the card used to drop PAF0003's 980 m² and show
+     a price alone), a dwelling its beds, baths and covered area, a
+     development nothing — its figures belong to its units. lib/format.ts
+     cardSpecs, pinned by lib/card-specs.test.ts. */
+  const specs = cardSpecs(listing);
 
   return (
     <article className="group flex flex-col overflow-hidden border border-line bg-surface transition-colors hover:border-line-2">

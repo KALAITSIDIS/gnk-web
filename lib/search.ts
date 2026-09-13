@@ -1,5 +1,5 @@
 import type { Listing } from "@/lib/crm";
-import { bedroomsOf, isContainer, pricing } from "@/lib/format";
+import { bedroomsOf, isContainer, label, moneyShort, pricing } from "@/lib/format";
 
 /**
  * The price ladder offered in the search bar.
@@ -94,4 +94,85 @@ export function matchesMaxPrice(l: Listing, maxPrice: string): boolean {
   // Price on application stays under any ceiling, as it always did: it may
   // well be under it, and the card says "Price on application" honestly.
   return !p.sale || p.sale <= Number(maxPrice);
+}
+
+/**
+ * The search bar's state, as it lives in the URL: `?q&type&beds&max&sort`.
+ *
+ * It lived in React alone until 2026-09-13, so a filtered view could not be
+ * linked, bookmarked, restored on reload, reached with the back button or
+ * seen in the logs (audit WEB-04). The URL is caller text, so reading it back
+ * is a validation, not a cast: a number that is not a number, a sort nobody
+ * offers, a type that is not shaped like one, all fall back to the default
+ * rather than into a predicate. Writing it out is the mirror: only what
+ * differs from the default, in one order, so the clean URL stays clean and
+ * two equal states always produce the same string.
+ */
+export const SORTS = ["newest", "price-asc", "price-desc"] as const;
+export type Sort = (typeof SORTS)[number];
+
+export interface SearchState {
+  q: string;
+  type: string;
+  beds: string;
+  max: string;
+  sort: Sort;
+}
+
+export const DEFAULT_SEARCH: SearchState = { q: "", type: "", beds: "", max: "", sort: "newest" };
+
+/** Free text is capped where the input is: long enough for a place, short enough to be a search. */
+const Q_MAX = 120;
+
+export function parseSearchState(params: { get(name: string): string | null }): SearchState {
+  const q = (params.get("q") ?? "").trim().slice(0, Q_MAX);
+  const type = (params.get("type") ?? "").trim();
+  const beds = (params.get("beds") ?? "").trim();
+  const max = (params.get("max") ?? "").trim();
+  const sort = (params.get("sort") ?? "").trim();
+  return {
+    q,
+    // the CRM's enum shape: lowercase words and underscores
+    type: /^[a-z_]{1,32}$/.test(type) ? type : "",
+    beds: /^[1-9]$/.test(beds) ? beds : "",
+    max: /^[1-9]\d{3,8}$/.test(max) ? max : "",
+    sort: (SORTS as readonly string[]).includes(sort) ? (sort as Sort) : "newest",
+  };
+}
+
+export function serializeSearchState(s: SearchState): string {
+  const p = new URLSearchParams();
+  if (s.q) p.set("q", s.q);
+  if (s.type) p.set("type", s.type);
+  if (s.beds) p.set("beds", s.beds);
+  if (s.max) p.set("max", s.max);
+  if (s.sort !== "newest") p.set("sort", s.sort);
+  return p.toString();
+}
+
+/**
+ * Newest is the feed's own order (published_at desc, then reference — the
+ * CRM's public_listings sorts it). A price sort orders by the SALE figure,
+ * the one the ladder is denominated in: a rental's month is not a price and
+ * a listing on application has none, so both keep the feed's order at the
+ * end rather than sorting as the cheapest thing on the page. Stable, and
+ * never in place.
+ */
+export function sortListings(listings: readonly Listing[], sort: Sort): Listing[] {
+  if (sort === "newest") return [...listings];
+  const priced = listings.filter((l) => salePrice(l) !== null);
+  const rest = listings.filter((l) => salePrice(l) === null);
+  const dir = sort === "price-asc" ? 1 : -1;
+  priced.sort((a, b) => dir * (salePrice(a)! - salePrice(b)!));
+  return [...priced, ...rest];
+}
+
+/** The removable chips for what is filtering right now — never the sort, which removes nothing. */
+export function activeFilters(s: SearchState): Array<{ key: keyof SearchState; label: string }> {
+  const chips: Array<{ key: keyof SearchState; label: string }> = [];
+  if (s.q) chips.push({ key: "q", label: `“${s.q}”` });
+  if (s.type) chips.push({ key: "type", label: label(s.type) });
+  if (s.beds) chips.push({ key: "beds", label: `${s.beds}+ bedrooms` });
+  if (s.max) chips.push({ key: "max", label: `Up to ${moneyShort(Number(s.max))}` });
+  return chips;
 }
