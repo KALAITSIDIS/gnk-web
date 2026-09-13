@@ -150,7 +150,7 @@ export function EnquiryForm({
   }
 
   const field =
-    "h-11 w-full border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
+    "h-11 w-full border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
 
   return (
         /* action and method are the no-JavaScript path, and they are not
@@ -193,7 +193,7 @@ export function EnquiryForm({
             name="message"
             rows={4}
             maxLength={messageBudget(variant ?? null)}
-            className="w-full border border-line bg-surface p-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent"
+            className="w-full border border-line-strong bg-surface p-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent"
           />
         </label>
       </div>
