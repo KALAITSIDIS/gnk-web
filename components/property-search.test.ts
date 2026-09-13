@@ -1,25 +1,29 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Listing } from "@/lib/crm";
 
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
 /**
- * The search bar reads its state from the URL and writes it back.
+ * The search bar, as the server renders it.
  *
- * Rendered on the server with Next's navigation hooks replaced by a URL of
- * our choosing, which is enough to prove the half that matters for a shared
- * link: what a visitor sees when they arrive with `?type=villa` in the
- * address bar. The other half — a change writing itself to the URL — is a
- * router call the component makes, asserted on the mock. The one-answer rule
+ * The URL state (`?q&type&beds&max&sort`) is read on the client after
+ * hydration and written back with history.replaceState; lib/search.ts owns
+ * the reading, writing and sorting and lib/search-state.test.ts pins them.
+ * What THIS file pins is the server's output, which is what a crawler and a
+ * visitor's first paint get: the whole book, always. The one-answer rule
  * (a control renders only when it has more than one answer), the three empty
  * states and the small-book grid are untouched and their tests still pass.
  */
-const state = vi.hoisted(() => ({ search: "", replace: vi.fn() }));
-vi.mock("next/navigation", () => ({
-  useSearchParams: () => new URLSearchParams(state.search),
-  usePathname: () => "/properties",
-  useRouter: () => ({ replace: state.replace }),
-}));
+const state = vi.hoisted(() => ({ search: "" }));
+// The server has no window; the component's server snapshot is the empty
+// URL. `state.search` is what a request URL would carry, and the point of the
+// tests below is that the server output does not depend on it.
+vi.mock("next/navigation", () => ({ usePathname: () => "/properties" }));
 vi.mock("next/link", () => ({
   default: (props: { href: string; className?: string; children: unknown }) =>
     createElement("a", { href: props.href, className: props.className }, props.children as never),
@@ -51,7 +55,6 @@ const BOOK = [
 
 const render = (search: string) => {
   state.search = search;
-  state.replace.mockClear();
   return renderToStaticMarkup(createElement(PropertySearch, { listings: BOOK }));
 };
 /** Card order by reference — a card links to its page twice (photo and title), so dedupe in order. */
@@ -60,33 +63,32 @@ const cards = (html: string) => [
 ];
 
 beforeEach(() => {
-  state.replace.mockClear();
+  state.search = "";
 });
 
-describe("arriving with a URL", () => {
-  it("shows every listing on the clean URL and no chips", () => {
-    const html = render("");
-    expect(new Set(cards(html))).toEqual(new Set(["PAF0004", "PAF0003", "PAF0001"]));
-    expect(html).not.toMatch(/Clear all/);
+describe("the server HTML always carries the whole book", () => {
+  /* THE INVARIANT THAT WAS BROKEN FOR 40 MINUTES ON 2026-09-13. Reading the
+     URL with useSearchParams inside a Suspense boundary made Next prerender
+     the fallback and render the search on the client only: the live home
+     and list pages shipped with NO listing cards in their HTML — nothing for
+     a crawler, nothing before hydration. The URL is therefore read after
+     hydration, and the server render is the unfiltered book whatever the URL
+     says; a filtered deep link is applied the moment the page is interactive. */
+  it("renders every card and no chips, even when the request URL carries a filter", () => {
+    for (const search of ["", "type=villa", "max=500000&beds=2", "sort=price-asc"]) {
+      const html = render(search);
+      expect(new Set(cards(html)), search).toEqual(new Set(["PAF0004", "PAF0003", "PAF0001"]));
+      expect(html, search).not.toMatch(/Clear all/);
+      expect(html, search).not.toMatch(/Remove filter/);
+    }
   });
 
-  it("applies ?type= from the URL and shows the chip with a way to remove it", () => {
-    const html = render("type=villa");
-    expect(new Set(cards(html))).toEqual(new Set(["PAF0001"]));
-    expect(html).toMatch(/Villa/);
-    expect(html).toMatch(/Clear all/);
-    expect(html).toMatch(/aria-label="Remove filter: Villa"/);
+  it("keeps the feed's order on the server — sorting is a client decision", () => {
+    expect(cards(render("sort=price-asc"))).toEqual(["PAF0004", "PAF0003", "PAF0001"]);
   });
 
-  it("applies ?max= and ?beds= together", () => {
-    const html = render("max=500000&beds=2");
-    expect(new Set(cards(html))).toEqual(new Set(["PAF0004", "PAF0001"]));
-  });
-
-  it("orders by price when asked, cheapest first, and the land card shows its plot", () => {
-    const html = render("sort=price-asc");
-    expect(cards(html)).toEqual(["PAF0004", "PAF0001", "PAF0003"]);
-    expect(html).toMatch(/980 m² plot/);
+  it("shows the land card's plot", () => {
+    expect(render("")).toMatch(/980 m² plot/);
   });
 
   it("offers the sort control, since there is more than one priced listing", () => {
@@ -95,9 +97,16 @@ describe("arriving with a URL", () => {
     expect(html).toMatch(/Price: low to high/);
   });
 
-  it("ignores a sort it does not know", () => {
-    const html = render("sort=random");
-    expect(cards(html)).toEqual(["PAF0004", "PAF0003", "PAF0001"]);
+  it("does not reach for useSearchParams or a Suspense boundary — that is what emptied the HTML", () => {
+    // A call or an import, not the word: the component's own comment names the
+    // hook to say why it is avoided, and a guard that trips on its explanation
+    // is the trap this repo has recorded twice.
+    const src = readFileSync(join(root, "components", "property-search.tsx"), "utf-8");
+    expect(src).not.toMatch(/useSearchParams\s*\(|import[^;]*\buseSearchParams\b/);
+    for (const page of ["app/page.tsx", "app/properties/page.tsx"]) {
+      const p = readFileSync(join(root, page), "utf-8");
+      expect(p, page).not.toMatch(/<Suspense/);
+    }
   });
 });
 
