@@ -17,8 +17,22 @@
  * public_listings) in KALAITSIDIS/gnk-crm.
  */
 
-const CRM = process.env.CRM_API_URL ?? "https://gnk-crm.vercel.app";
+export const CRM = process.env.CRM_API_URL ?? "https://gnk-crm.vercel.app";
 const ORG = process.env.CRM_ORG_SLUG ?? "gnk";
+
+/**
+ * The site's proof of identity to the CRM, read at call time as the platform
+ * binds it. On an enquiry it makes the CRM meter the visitor we forward rather
+ * than our one egress address; on a feed read it puts the site on its own,
+ * larger budget instead of the 120-per-quarter-hour a stranger gets (the CRM's
+ * REL-03). Unset, both fall back to being metered as a stranger — weaker, not
+ * broken. It opens nothing.
+ */
+const forwardKey = () => process.env.CRM_FORWARD_KEY ?? "";
+const forwardHeaders = (): Record<string, string> => {
+  const key = forwardKey();
+  return key ? { "x-gnk-forward-key": key } : {};
+};
 
 /** Seconds before a page rebuilds from the feed. The CRM sends max-age=60. */
 export const FEED_REVALIDATE = 60;
@@ -165,6 +179,7 @@ async function readAllPages(): Promise<PagedRead> {
         `${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&offset=${offset}`,
         {
           next: { revalidate: FEED_REVALIDATE },
+          headers: forwardHeaders(),
           // Without this a CRM that accepts the connection and never answers
           // hangs until the platform kills the function, and the visitor gets
           // a 504 on the home page rather than the graceful degradation below.
@@ -225,7 +240,11 @@ export async function getListing(reference: string): Promise<ListingResult> {
   try {
     const res = await fetch(
       `${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&reference=${encodeURIComponent(reference)}`,
-      { next: { revalidate: FEED_REVALIDATE }, signal: AbortSignal.timeout(FEED_TIMEOUT_MS) },
+      {
+        next: { revalidate: FEED_REVALIDATE },
+        headers: forwardHeaders(),
+        signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+      },
     );
     if (!res.ok) {
       console.error(`[crm] listing lookup responded ${res.status} for ${reference}`);
@@ -290,14 +309,13 @@ export async function submitEnquiry(
    */
   clientIp?: string,
 ): Promise<EnquiryResult> {
-  const forwardKey = process.env.CRM_FORWARD_KEY ?? "";
   try {
     const res = await fetch(`${CRM}/api/public/enquiries`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(clientIp ? { "x-gnk-visitor-ip": clientIp } : {}),
-        ...(forwardKey ? { "x-gnk-forward-key": forwardKey } : {}),
+        ...forwardHeaders(),
       },
       body: JSON.stringify({ org: ORG, ...input }),
       cache: "no-store",
