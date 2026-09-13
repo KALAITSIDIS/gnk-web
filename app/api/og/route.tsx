@@ -35,7 +35,7 @@ export const runtime = "nodejs";
 async function displayFont(): Promise<ArrayBuffer | null> {
   try {
     const css = await fetch(
-      "https://fonts.googleapis.com/css2?family=Newsreader:wght@500&display=swap",
+      "https://fonts.googleapis.com/css2?family=Literata:wght@500&display=swap",
       { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 86400 } },
     ).then((r) => (r.ok ? r.text() : ""));
     const url = css.match(/src:\s*url\((https:[^)]+)\)/)?.[1];
@@ -60,7 +60,7 @@ export async function GET() {
           justifyContent: "space-between",
           background: "#14524c",
           padding: "72px 80px",
-          fontFamily: font ? "Newsreader" : "serif",
+          fontFamily: font ? "Literata" : "serif",
        }}
       >
         <div style={{ display: "flex", flexDirection: "column" }}>
@@ -85,7 +85,7 @@ export async function GET() {
       width: 1200,
       height: 630,
       ...(font
-        ? { fonts: [{ name: "Newsreader", data: font, weight: 500 as const, style: "normal" as const }] }
+        ? { fonts: [{ name: "Literata", data: font, weight: 500 as const, style: "normal" as const }] }
         : {}),
     },
   );

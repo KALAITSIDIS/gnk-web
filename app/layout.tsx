@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Newsreader, Public_Sans } from "next/font/google";
+import { Inter_Tight, Literata } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
@@ -7,19 +7,37 @@ import { SiteFooter } from "@/components/site-footer";
 import { SITE_URL } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
-const newsreader = Newsreader({
-  subsets: ["latin"],
-  variable: "--font-newsreader",
+/**
+ * Two families, chosen because both carry Latin, Greek and Cyrillic in ONE
+ * face. The CRM feed sends `el` and `ru` for every title, and CSS falls back
+ * per character: with Newsreader and Public Sans (latin, latin-ext and
+ * vietnamese only, and requested as `latin` alone) a Greek word inside an
+ * English heading rendered in whatever serif the visitor's machine had, at
+ * Newsreader's spacing. Nobody files a bug for that; it just looks slightly
+ * wrong everywhere.
+ *
+ * Naming a capable family is not enough — the subsets have to be asked for,
+ * or the build ships Latin only. lib/type.test.ts pins this list, and
+ * scripts/check-fonts.mjs checks the CSS the build actually emitted
+ * (`postbuild`). Literata is variable with an optical-size axis, so display
+ * sizes get the display cut without a second file.
+ *
+ * The subset list is written out twice because next/font reads these options
+ * at build time and accepts only literals — a shared constant is rejected.
+ * lib/type.test.ts is the one place that asserts both lists are the same four.
+ */
+const literata = Literata({
+  subsets: ["latin", "latin-ext", "greek", "cyrillic"],
+  variable: "--font-literata",
   display: "swap",
-  weight: ["400", "500", "600"],
+  axes: ["opsz"],
 });
 
-const publicSans = Public_Sans({
-  subsets: ["latin"],
-  variable: "--font-public-sans",
+const interTight = Inter_Tight({
+  subsets: ["latin", "latin-ext", "greek", "cyrillic"],
+  variable: "--font-inter-tight",
   display: "swap",
 });
-
 
 
 export const metadata: Metadata = {
@@ -51,7 +69,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${newsreader.variable} ${publicSans.variable}`}>
+    <html lang="en" className={`${literata.variable} ${interTight.variable}`}>
       <body className="min-h-screen flex flex-col">
         <a
           href="#main"

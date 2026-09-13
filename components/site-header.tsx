@@ -32,22 +32,19 @@ export function SiteHeader() {
         </a>
       </div>
 
-      {/* The nav has to survive a phone; a hamburger that needs JavaScript to
-          open is not worth the risk on a six-item menu.
- 
-          It no longer fits: at 375px the row is 462px wide, so 87px hang off the
-          right and "Contact" — a primary call to action — starts out of sight.
-          It has always scrolled, but the only hint was a clipped word. The fade
-          below says so. pointer-events-none, so it cannot swallow a tap on the
-          item it sits over. */}
-      <nav aria-label="Main, mobile" className="relative border-t border-line md:hidden">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-surface to-transparent"
-        />
-        <ul className="mx-auto flex max-w-7xl gap-5 overflow-x-auto px-5 py-2.5 text-sm text-ink-2">
+      {/* The nav has to survive a phone without JavaScript: a hamburger that
+          needs a script to open is not worth the risk on a six-item menu.
+
+          It used to scroll sideways. At 375 px the row was 462 px wide, so
+          87 px hung off the right and "Contact" — a primary call to action —
+          started out of sight behind a gradient that only hinted at it
+          (measured 2026-09-13). Six short words are allowed to wrap onto a
+          second line instead: nothing hidden, nothing scrolling, no fade
+          pretending to be a control. components/site-header.test.ts says so. */}
+      <nav aria-label="Main, mobile" className="border-t border-line md:hidden">
+        <ul className="mx-auto flex max-w-7xl flex-wrap gap-x-5 gap-y-1.5 px-5 py-2.5 text-sm text-ink-2">
           {nav.map((item) => (
-            <li key={item.href} className="shrink-0">
+            <li key={item.href}>
               <Link href={item.href} className="hover:text-accent">
                 {item.label}
               </Link>

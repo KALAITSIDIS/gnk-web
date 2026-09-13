@@ -21,14 +21,23 @@
   --color-surface-2: #eeefeb;
   --color-line: #dfe1dc;
   --color-line-2: #c6c9c2;
+  /* The resting edge of an input or select. --color-line measures 1.32:1 on
+     white; WCAG 1.4.11 asks 3:1 of anything that bounds a control, and a
+     passing focus ring does not excuse the resting state. Same grey-green
+     family as the rest; the ratios (3.23:1 on paper, 3.46:1 on surface) are
+     measured by lib/contrast.test.ts rather than trusted from this comment.
+     Decorative rules keep --color-line: they are exempt, and a heavier rule
+     would read as a control. */
+  --color-line-strong: #7a8f80;
 
   /* deep sea-pine: Mediterranean without being a postcard */
   --color-accent: #14524c;
   --color-accent-hover: #0d3b36;
   --color-accent-soft: #e2edea;
 
-  --font-display: var(--font-newsreader), Georgia, "Times New Roman", serif;
-  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Both families carry Greek and Cyrillic in one face — see app/layout.tsx. */
+  --font-display: var(--font-literata), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {

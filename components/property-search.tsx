@@ -108,7 +108,7 @@ export function PropertySearch({
           ? "sm:grid-cols-2"
           : "";
   const field =
-    "h-11 w-full border border-line bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
+    "h-11 w-full border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
 
   return (
     <div>
