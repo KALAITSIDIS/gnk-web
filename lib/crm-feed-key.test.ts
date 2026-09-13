@@ -11,7 +11,7 @@ import { getListing, getListings } from "./crm";
  * budget in a minute, and a 429 turns every page into its last good copy
  * (audit REL-03). Since 2026-09-06 the enquiry door believes a visitor header
  * only when `x-gnk-forward-key` matches; the feed now reads the same key and
- * meters a proven caller on its own, larger budget. The key still lifts
+ * exempts a proven caller from the feed meter (it used to buy a larger budget). The key still lifts
  * nothing for anyone else: unset, the site is metered as a stranger.
  */
 const OLD = { ...process.env };
