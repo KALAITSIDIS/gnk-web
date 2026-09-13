@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { INTENTS } from "@/lib/enquiry-fields";
+import { contactDetailError, INTENTS } from "@/lib/enquiry-fields";
 
 /**
  * The enquiry form on the device most people fill it in on.
@@ -65,5 +65,61 @@ describe("the three common requests", () => {
 
   it("are not offered on the contact form, which is about nothing in particular", () => {
     for (const intent of INTENTS) expect(contactForm).not.toContain(intent.label);
+  });
+});
+
+describe("what the form says is required, before anyone presses Send", () => {
+  /* Second pass 2026-09-13: the name was required and nothing said so; the
+     email-or-phone rule surfaced only after a failed submit, as a message two
+     fields below the ones it was about, with focus left on the button. */
+  it("marks the name as required in its label", () => {
+    const label = /<label[^>]*>[\s\S]*?<\/label>/.exec(contactForm.slice(contactForm.indexOf('name="name"') - 400));
+    expect(label, "the name field has a label").not.toBeNull();
+    expect(label![0]).toMatch(/required/i);
+  });
+
+  it("says that one of email or phone is needed, next to those two fields", () => {
+    const note = /<p[^>]*id="contact-note"[^>]*>([\s\S]*?)<\/p>/.exec(contactForm);
+    expect(note, "a note beside email and phone").not.toBeNull();
+    expect(note![1]).toMatch(/one is required/i);
+    expect(contactForm.indexOf('id="contact-note"')).toBeGreaterThan(contactForm.indexOf('name="phone"'));
+    expect(contactForm.indexOf('id="contact-note"')).toBeLessThan(contactForm.indexOf('name="message"'));
+  });
+
+  it("wires email and phone to the note and to the error that will appear there", () => {
+    for (const name of ["email", "phone"]) {
+      const input = new RegExp(`<input[^>]*name="${name}"[^>]*>`).exec(contactForm);
+      expect(input![0], name).toMatch(/aria-describedby="[^"]*contact-note[^"]*"/);
+      expect(input![0], name).toMatch(/aria-describedby="[^"]*contact-error[^"]*"/);
+    }
+  });
+
+  it("is one rule, tested on its own: blank email and blank phone is the only failing case", () => {
+    expect(contactDetailError({ email: "", phone: "" })).toMatch(/email address or a phone number/);
+    expect(contactDetailError({ email: "  ", phone: null })).not.toBeNull();
+    expect(contactDetailError({ email: "a@b.cy", phone: "" })).toBeNull();
+    expect(contactDetailError({ email: "", phone: "+357 99 000000" })).toBeNull();
+  });
+});
+
+describe("the valuation variant asks what the valuation page promises", () => {
+  /* /valuation said "tell us where the property is and roughly what it is"
+     above a form with only name, email, phone and a message. */
+  const valuationForm = renderToStaticMarkup(createElement(EnquiryForm, { variant: "valuation" }));
+
+  it("offers district, area and property type", () => {
+    for (const name of ["district", "area", "property_type"]) {
+      expect(valuationForm, name).toMatch(new RegExp(`<select[^>]*name="${name}"`));
+    }
+  });
+
+  it("does not ask the seller's nine further questions", () => {
+    for (const name of ["bedrooms", "covered_area_sqm", "plot_area_sqm", "year_built", "title_deed_status", "listed_elsewhere", "timing"]) {
+      expect(valuationForm, name).not.toMatch(new RegExp(`name="${name}"`));
+    }
+  });
+
+  it("says those three are optional", () => {
+    expect(valuationForm).toMatch(/optional/i);
   });
 });

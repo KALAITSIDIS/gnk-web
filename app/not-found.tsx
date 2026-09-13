@@ -1,4 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+/**
+ * The generic 404 names itself. It carried the site's default title, so the
+ * tab, the history entry and a bookmark of a dead link all read as the home
+ * page (second pass, 2026-09-13). The docs promise a metadata export only
+ * for a global-not-found, but this Next honours one here too — measured on
+ * the production build: the head carries "Page not found — GN Kalaitsidis
+ * Capital" through the layout's template, and the tab shows it. Two other
+ * routes were tried first and did not work: a <title> rendered in the page
+ * loses to the layout's, and document.title set after hydration is
+ * overwritten when the streamed metadata lands. app/not-found.test.ts.
+ */
+export const metadata: Metadata = { title: "Page not found" };
 
 export default function NotFound() {
   return (

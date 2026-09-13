@@ -226,9 +226,12 @@ export function PropertySearch({
     (priceSteps.length > 0 ? 1 : 0);
   const barCols = BAR_COLS[controls >= 4 ? controls + 1 : controls] ?? "";
   /* 16 px on a phone: Safari zooms the page into any field set smaller when
-     it is focused, and every field here was 14 (measured 2026-09-13). */
-  const field =
-    "h-11 w-full border border-line-strong bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus:border-accent sm:text-sm";
+     it is focused, and every field here was 14 (measured 2026-09-13). The
+     width is added separately: a filter fills its grid track, the sort is
+     as wide as its words. */
+  const fieldBase =
+    "h-11 border border-line-strong bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus:border-accent sm:text-sm";
+  const field = `${fieldBase} w-full`;
 
   const set = <K extends keyof SearchState>(key: K, value: SearchState[K]) =>
     setS((current) => ({ ...current, [key]: value }));
@@ -361,7 +364,7 @@ export function PropertySearch({
 
       {showSort ? (
         <div className="mt-8 flex items-center justify-end gap-3 text-sm">
-          <label htmlFor="sort" className="text-ink-3">
+          <label htmlFor="sort" className="whitespace-nowrap text-ink-3">
             Sort by
           </label>
           <select
@@ -369,7 +372,7 @@ export function PropertySearch({
             name="sort"
             value={s.sort}
             onChange={(e) => set("sort", e.target.value as Sort)}
-            className={`${field} sm:w-auto`}
+            className={`${fieldBase} w-auto`}
           >
             {SORTS.map((o) => (
               <option key={o} value={o}>
@@ -404,7 +407,7 @@ export function PropertySearch({
           </p>
           <a
             href="/contact"
-            className="mt-5 inline-block bg-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-hover"
+            className="mt-5 inline-block bg-accent px-5 py-3 text-sm font-medium text-white hover:bg-accent-hover"
           >
             Tell us what you need
           </a>

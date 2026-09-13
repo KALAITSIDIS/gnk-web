@@ -72,6 +72,7 @@ export default function ValuationPage() {
 
         <div className="lg:sticky lg:top-8">
           <EnquiryForm
+            variant="valuation"
             heading="Request a valuation"
             intro="Tell us where the property is and roughly what it is. We will come back with what we need to give you a proper view."
             cta="Request valuation"

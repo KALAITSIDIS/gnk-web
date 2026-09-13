@@ -90,7 +90,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         <SiteHeader />
-        <main id="main" className="flex-1">
+        {/* tabIndex -1: the skip link's target has to be able to take focus,
+            or a keyboard user is scrolled to the content and left with the
+            body focused (second pass, 2026-09-13). No ring on the region:
+            the ring belongs to the controls inside it. */}
+        <main id="main" tabIndex={-1} className="flex-1 outline-none">
           {children}
         </main>
         <SiteFooter />

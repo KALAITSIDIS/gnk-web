@@ -113,6 +113,24 @@ export const INTENTS: readonly { label: string; message: (reference: string) => 
   },
 ];
 
+/**
+ * The one client-side rule the form enforces before sending: the desk needs
+ * a way to reply. The route refuses the same case with a 400; this saves the
+ * round trip. One function, so the message and the condition cannot drift
+ * between the form and its test.
+ */
+export const CONTACT_DETAIL_MESSAGE =
+  "Please leave an email address or a phone number so we can reply.";
+
+export function contactDetailError(f: {
+  email?: string | null;
+  phone?: string | null;
+}): string | null {
+  const hasEmail = (f.email ?? "").trim() !== "";
+  const hasPhone = (f.phone ?? "").trim() !== "";
+  return hasEmail || hasPhone ? null : CONTACT_DETAIL_MESSAGE;
+}
+
 export const TIMINGS = [
   { value: "now", label: "Ready to sell now" },
   { value: "3_months", label: "Within about three months" },
