@@ -415,3 +415,25 @@ export function yearBuiltLabel(l: Listing): string | null {
   if (isContainer(l)) return null;
   return l.year_built ? String(l.year_built) : null;
 }
+
+/**
+ * The card's one line of measurements, by what the thing IS.
+ *
+ * A plot has no bedrooms and no covered area; its size is its plot, and the
+ * card used to drop it and show a price alone (PAF0003, 980 m²). A dwelling
+ * reads beds, baths and covered area, a studio saying so rather than "0 bed".
+ * A development shows nothing: its own figures describe no dwelling anyone
+ * can buy (isContainer). lib/card-specs.test.ts.
+ */
+export function cardSpecs(l: Listing): string[] {
+  if (isContainer(l)) return [];
+  if (l.property_type === "land") {
+    const plot = area(l.plot_area_sqm);
+    return plot ? [plot + " plot"] : [];
+  }
+  return [
+    bedroomsSpec(l),
+    l.bathrooms ? l.bathrooms + " bath" : null,
+    area(l.covered_area_sqm),
+  ].filter((s): s is string => Boolean(s));
+}

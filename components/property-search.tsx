@@ -1,14 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { Listing } from "@/lib/crm";
 import { label, moneyShort, placeLine, text, titleOf } from "@/lib/format";
 import {
+  activeFilters,
   bedroomOptionsFor,
+  DEFAULT_SEARCH,
   matchesBedrooms,
   matchesMaxPrice,
+  parseSearchState,
   priceStepsFor,
   salePrice,
+  serializeSearchState,
+  sortListings,
+  SORTS,
+  type SearchState,
+  type Sort,
 } from "@/lib/search";
 import { PropertyCard } from "@/components/property-card";
 
@@ -24,8 +33,26 @@ import { PropertyCard } from "@/components/property-card";
  * answer to give. A district dropdown listing one district, or a price slider
  * over a single price, tells a visitor exactly how little there is. Aristo
  * prints "All Properties (273)", which is honest at 273 and brutal at four —
- * so there is no result count here either.
+ * so there is no result count here either. The sort control follows the same
+ * rule: it appears once two listings carry a sale price.
+ *
+ * THE STATE LIVES IN THE URL (2026-09-13, audit WEB-04). `?q&type&beds&max&
+ * sort` is read on arrival — so a shared or bookmarked link, a reload and the
+ * back button all restore the view — and written back with the native
+ * history.replaceState as the controls change, debounced so typing does not
+ * write a URL per keystroke. lib/search.ts owns the reading and writing; this file only wires
+ * the controls to it. A chip row names what is filtering and lets each filter
+ * be removed alone, or all at once.
  */
+const SORT_LABELS: Record<Sort, string> = {
+  newest: "Newest first",
+  "price-asc": "Price: low to high",
+  "price-desc": "Price: high to low",
+};
+
+/** Long enough to type a word, short enough that the address bar keeps up. */
+const URL_WRITE_DELAY_MS = 250;
+
 export function PropertySearch({
   listings,
   /** The feed could not be reached. Distinct from an empty book: saying
@@ -36,10 +63,45 @@ export function PropertySearch({
   listings: Listing[];
   feedDown?: boolean;
 }) {
-  const [q, setQ] = useState("");
-  const [type, setType] = useState("");
-  const [beds, setBeds] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
+  const params = useSearchParams();
+  const pathname = usePathname();
+
+  const [s, setS] = useState<SearchState>(() => parseSearchState(params));
+
+  /* Write the state to the URL after the controls change — never on mount,
+     and never when the URL already says the same thing. The native
+     history.replaceState, which Next keeps in step with useSearchParams: no
+     history entry per keystroke, no server round trip per filter (a
+     router.replace would fetch the page's payload again), and nothing to
+     wait for offline. */
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    const next = serializeSearchState(s);
+    if (next === serializeSearchState(parseSearchState(params))) return;
+    const t = setTimeout(
+      () => window.history.replaceState(null, "", next ? `${pathname}?${next}` : pathname),
+      URL_WRITE_DELAY_MS,
+    );
+    return () => clearTimeout(t);
+  }, [s, params, pathname]);
+
+  /* Follow the URL when it moves without us — the back and forward buttons.
+     Done during render, React's pattern for state that follows a prop, not
+     in an effect: an effect would run a render late and, keyed on the state
+     as well, would reset the input to the not-yet-written URL on every
+     keystroke. Our own replace() lands as a URL equal to the state, so only
+     the URL memory moves; a URL that differs from the state is a navigation
+     the person made, and the state follows it. */
+  const urlKey = serializeSearchState(parseSearchState(params));
+  const [seenUrl, setSeenUrl] = useState(urlKey);
+  if (urlKey !== seenUrl) {
+    setSeenUrl(urlKey);
+    if (urlKey !== serializeSearchState(s)) setS(parseSearchState(params));
+  }
 
   const types = useMemo(
     () => [...new Set(listings.map((l) => l.property_type).filter(Boolean))].sort(),
@@ -58,12 +120,19 @@ export function PropertySearch({
   // something, or it is a filter that can only return an empty page.
   const priceSteps = useMemo(() => priceStepsFor(prices), [prices]);
 
+  /* A type the book does not hold filters nothing and shows no chip: a stale
+     link to a type that has since sold should show the book, not a blank. */
+  const effective: SearchState = useMemo(
+    () => ({ ...s, type: types.includes(s.type) ? s.type : "" }),
+    [s, types],
+  );
+
   const results = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return listings.filter((l) => {
-      if (type && l.property_type !== type) return false;
-      if (!matchesBedrooms(l, beds)) return false;
-      if (!matchesMaxPrice(l, maxPrice)) return false;
+    const needle = effective.q.trim().toLowerCase();
+    const filtered = listings.filter((l) => {
+      if (effective.type && l.property_type !== effective.type) return false;
+      if (!matchesBedrooms(l, effective.beds)) return false;
+      if (!matchesMaxPrice(l, effective.max)) return false;
       if (needle) {
         const hay = [
           titleOf(l),
@@ -79,9 +148,11 @@ export function PropertySearch({
       }
       return true;
     });
-  }, [listings, q, type, beds, maxPrice]);
+    return sortListings(filtered, effective.sort);
+  }, [listings, effective]);
 
-  const filtering = Boolean(q || type || beds || maxPrice);
+  const chips = activeFilters(effective);
+  const filtering = chips.length > 0;
   /* One card in a three-column grid floats in dead space. A small portfolio
      gets a layout built for its size instead — which reads as deliberate,
      where a mostly-empty grid reads as a business with nothing to sell. */
@@ -94,21 +165,31 @@ export function PropertySearch({
   /* How many controls will actually render. A four-column bar holding one
      input leaves three empty columns, which says "we have nothing" as loudly
      as a result count would. The bar sizes itself to what it contains. */
+  const showSort = prices.length > 1;
   const controls =
-    1 + (types.length > 1 ? 1 : 0) + (bedOptions.length > 1 ? 1 : 0) + (priceSteps.length > 0 ? 1 : 0);
-  /* Five tracks for four controls, because the text input spans two: on a
-     four-track grid the fourth control wrapped onto a second row by itself
-     (live-ui-3, measured 2026-09-06). */
+    1 +
+    (types.length > 1 ? 1 : 0) +
+    (bedOptions.length > 1 ? 1 : 0) +
+    (priceSteps.length > 0 ? 1 : 0) +
+    (showSort ? 1 : 0);
+  /* The text input spans two tracks; every other control takes one. Five
+     controls therefore need six tracks, four need five (live-ui-3, measured
+     2026-09-06: on a four-track grid the fourth control wrapped alone). */
   const barCols =
-    controls >= 4
-      ? "sm:grid-cols-2 lg:grid-cols-5"
-      : controls === 3
-        ? "sm:grid-cols-3"
-        : controls === 2
-          ? "sm:grid-cols-2"
-          : "";
+    controls >= 5
+      ? "sm:grid-cols-2 lg:grid-cols-6"
+      : controls === 4
+        ? "sm:grid-cols-2 lg:grid-cols-5"
+        : controls === 3
+          ? "sm:grid-cols-3"
+          : controls === 2
+            ? "sm:grid-cols-2"
+            : "";
   const field =
     "h-11 w-full border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
+
+  const set = <K extends keyof SearchState>(key: K, value: SearchState[K]) =>
+    setS((current) => ({ ...current, [key]: value }));
 
   return (
     <div>
@@ -117,8 +198,10 @@ export function PropertySearch({
           <span className="sr-only">Search by area, town or reference</span>
           <input
             type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+            name="q"
+            value={s.q}
+            maxLength={120}
+            onChange={(e) => set("q", e.target.value)}
             placeholder="Peyia, Coral Bay, Paphos, PAF0001…"
             className={field}
           />
@@ -127,7 +210,7 @@ export function PropertySearch({
         {types.length > 1 ? (
           <label>
             <span className="sr-only">Property type</span>
-            <select value={type} onChange={(e) => setType(e.target.value)} className={field}>
+            <select name="type" value={effective.type} onChange={(e) => set("type", e.target.value)} className={field}>
               <option value="">Any type</option>
               {types.map((t) => (
                 <option key={t} value={t}>
@@ -141,7 +224,7 @@ export function PropertySearch({
         {bedOptions.length > 1 ? (
           <label>
             <span className="sr-only">Minimum bedrooms</span>
-            <select value={beds} onChange={(e) => setBeds(e.target.value)} className={field}>
+            <select name="beds" value={s.beds} onChange={(e) => set("beds", e.target.value)} className={field}>
               <option value="">Any bedrooms</option>
               {bedOptions.map((b) => (
                 <option key={b} value={b}>
@@ -155,17 +238,54 @@ export function PropertySearch({
         {priceSteps.length > 0 ? (
           <label>
             <span className="sr-only">Maximum price</span>
-            <select value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} className={field}>
+            <select name="max" value={s.max} onChange={(e) => set("max", e.target.value)} className={field}>
               <option value="">Any price</option>
-              {priceSteps.map((s) => (
-                <option key={s} value={s}>
-                  Up to {moneyShort(s)}
+              {priceSteps.map((step) => (
+                <option key={step} value={step}>
+                  Up to {moneyShort(step)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
+        {showSort ? (
+          <label>
+            <span className="sr-only">Sort by</span>
+            <select name="sort" value={s.sort} onChange={(e) => set("sort", e.target.value as Sort)} className={field}>
+              {SORTS.map((o) => (
+                <option key={o} value={o}>
+                  {SORT_LABELS[o]}
                 </option>
               ))}
             </select>
           </label>
         ) : null}
       </div>
+
+      {filtering ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" aria-label="Active filters">
+          {chips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => set(chip.key, "" as never)}
+              aria-label={`Remove filter: ${chip.label}`}
+              className="inline-flex items-center gap-1.5 border border-line-strong bg-surface px-2.5 py-1 text-ink-2 hover:border-accent hover:text-accent"
+            >
+              {chip.label}
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setS({ ...DEFAULT_SEARCH, sort: s.sort })}
+            className="px-1 text-accent underline underline-offset-2 hover:text-accent-hover"
+          >
+            Clear all
+          </button>
+        </div>
+      ) : null}
 
       {results.length > 0 ? (
         <div className={`mt-8 grid gap-6 ${resultCols}`}>

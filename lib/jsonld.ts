@@ -201,7 +201,8 @@ export interface ListingJsonLd {
   name: string;
   description: string;
   url: string;
-  image: (string | null)[];
+  /** Absent when the listing has no photographs — never an empty list. */
+  image?: string[];
   datePosted?: string;
   /** One offer is an object, two are an array — the shape consumers expect. Absent when unpriced. */
   offers?: Offer | Offer[];
@@ -215,6 +216,10 @@ export function listingJsonLd(l: Listing): ListingJsonLd {
   const body = text(l.public_description);
   const offers = offersFor(l);
   const bedrooms = bedroomsOf(l);
+  // The card renditions that exist. `image: []` was emitted on every
+  // unphotographed listing — a valid statement of nothing that validators
+  // flag and that would go stale the day one photograph lands (audit 4.3).
+  const image = (l.images ?? []).map((i) => i.card).filter((c): c is string => Boolean(c));
 
   const ld: ListingJsonLd = {
     "@context": "https://schema.org",
@@ -224,7 +229,7 @@ export function listingJsonLd(l: Listing): ListingJsonLd {
     // Absolute: a relative url in structured data is undefined behaviour for
     // every consumer that reads it away from this page.
     url: absolute(`/properties/${l.reference}`),
-    image: (l.images ?? []).map((i) => i.card).filter(Boolean),
+    ...(image.length > 0 ? { image } : {}),
     mainEntity: {
       "@type": mainEntityType(l),
       name: titleOf(l),
