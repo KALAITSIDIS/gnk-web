@@ -57,6 +57,23 @@ describe("text tokens clear 4.5:1 on both grounds", () => {
   });
 });
 
+describe("the placeholder for a photograph is readable on its own ground", () => {
+  // Measured live 2026-09-13: --color-ink-3 on --color-surface-2 was 4.23:1
+  // at 14 px, under the floor. The placeholder rule now takes --color-ink-2.
+  const rule = /\.placeholder\s*\{([^}]*)\}/.exec(css);
+
+  it("is declared, on the second surface", () => {
+    expect(rule, ".placeholder is defined").not.toBeNull();
+    expect(rule![1]).toMatch(/background:\s*var\(--color-surface-2\)/);
+  });
+
+  it("uses an ink that clears 4.5:1 on that surface", () => {
+    const ink = /color:\s*var\((--color-ink[-\d]*)\)/.exec(rule![1]!);
+    expect(ink, ".placeholder sets its ink from a token").not.toBeNull();
+    expect(contrast(t[ink![1]!]!, t["--color-surface-2"]!)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe("the resting edge of a control clears 3:1 on both grounds", () => {
   it("--color-line-strong exists for that role", () => {
     expect(t["--color-line-strong"], "--color-line-strong is declared").toBeDefined();

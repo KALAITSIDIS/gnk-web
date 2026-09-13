@@ -339,7 +339,9 @@ export default async function PropertyPage({
                 that no longer exists, on live client mandates. The CRM holds that repeal
                 gazette-verified in cyprus_config.stamp_duty.abolished, dated 2026-08-29 —
                 if this ever needs restating, read it from there rather than from memory. */}
-            <p className="mt-4 text-xs text-ink-3">
+            {/* Small print at 14 px, not 12: the one sentence on the page about
+                tax was the smallest text on it (lib/type-floor.test.ts). */}
+            <p className="mt-4 text-sm text-ink-3">
               Transfer fees and VAT vary with the buyer&apos;s circumstances — and stamp duty no
               longer applies to documents signed since 1 January 2026. We model the full
               acquisition cost for you before you commit — ask and we will send it in writing.
@@ -347,10 +349,18 @@ export default async function PropertyPage({
           </section>
         </div>
 
-        <div id="enquire" className="scroll-mt-6 lg:sticky lg:top-8">
+        {/* lg:top-20 clears the 61 px sticky header (components/site-header.tsx)
+            and equals the html { scroll-padding-top } in globals.css, so the
+            bar's "Enquire" lands where the pinned column sits. Measured at
+            1440 × 900: the column pins only while the listing's text column
+            is taller than the form plus this offset, so a listing without
+            photographs shows it for a short scroll and one with them for
+            most of the page. */}
+        <div id="enquire" className="lg:sticky lg:top-20">
           <EnquiryForm
             reference={l.reference}
             listingUrl={listingUrl}
+            focusOnHash="#enquire"
             heading="Ask about this property"
             intro={`Arrange a viewing, ask for the full cost model, or get our written view on the price. You will hear back from one of us at ${site.shortName}.`}
             cta="Send enquiry"

@@ -5,12 +5,15 @@ import type { Listing } from "@/lib/crm";
 import { label, moneyShort, placeLine, text, titleOf } from "@/lib/format";
 import {
   activeFilters,
+  areaOptionsFor,
   bedroomOptionsFor,
   DEFAULT_SEARCH,
+  matchesArea,
   matchesBedrooms,
   matchesMaxPrice,
   parseSearchState,
   priceStepsFor,
+  resultCountLabel,
   salePrice,
   serializeSearchState,
   sortListings,
@@ -32,16 +35,29 @@ import { PropertyCard } from "@/components/property-card";
  * answer to give. A district dropdown listing one district, or a price slider
  * over a single price, tells a visitor exactly how little there is. Aristo
  * prints "All Properties (273)", which is honest at 273 and brutal at four —
- * so there is no result count here either. The sort control follows the same
- * rule: it appears once two listings carry a sale price.
+ * so the unfiltered book carries no result count. While a filter is on, the
+ * chip row says how many match: that counts what the filter did, not what
+ * the firm holds, and a person who has just watched the grid change under
+ * them needs to be told what happened (lib/search.ts resultCountLabel). The
+ * sort control follows the one-answer rule too: it appears once two listings
+ * carry a sale price.
  *
- * THE STATE LIVES IN THE URL (2026-09-13, audit WEB-04). `?q&type&beds&max&
- * sort` is read after hydration — so a shared or bookmarked link, a reload
- * and the back button all restore the view — and written back with the native
- * history.replaceState as the controls change, debounced so typing does not
- * write a URL per keystroke. The server render is always the whole book. lib/search.ts owns the reading and writing; this file only wires
- * the controls to it. A chip row names what is filtering and lets each filter
- * be removed alone, or all at once.
+ * THE STATE LIVES IN THE URL (2026-09-13, audit WEB-04). `?q&type&area&beds&
+ * max&sort` is read after hydration — so a shared or bookmarked link, a
+ * reload and the back button all restore the view — and written back with
+ * the native history.replaceState as the controls change, debounced so typing
+ * does not write a URL per keystroke. The server render is always the whole
+ * book. lib/search.ts owns the reading and writing; this file only wires the
+ * controls to it. A chip row names what is filtering and lets each filter be
+ * removed alone, or all at once.
+ *
+ * ON A PHONE the search box stays and everything else folds behind one
+ * "Filters & sort" row. Measured on an iPhone 13 viewport (2026-09-13): five
+ * stacked controls made a 302 px block, and with the header and the hero
+ * above it the first property card began at 819 px on a 664 px screen. The
+ * fold is a JavaScript toggle, which is honest about what this component is:
+ * the filtering itself needs JavaScript, and without it the page is the
+ * whole book either way.
  */
 const SORT_LABELS: Record<Sort, string> = {
   newest: "Newest first",
@@ -62,6 +78,18 @@ const subscribeToUrl = (onChange: () => void) => {
 const readUrlSearch = () => window.location.search;
 const readServerUrlSearch = () => "";
 
+/* The text input spans two tracks; every other control takes one. Five
+   controls therefore need six tracks, four need five (live-ui-3, measured
+   2026-09-06: on a four-track grid the fourth control wrapped alone). Written
+   out because Tailwind only ships the class names it can read. */
+const BAR_COLS: Record<number, string> = {
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-3",
+  5: "sm:grid-cols-2 lg:grid-cols-5",
+  6: "sm:grid-cols-2 lg:grid-cols-6",
+  7: "sm:grid-cols-2 lg:grid-cols-7",
+};
+
 export function PropertySearch({
   listings,
   /** The feed could not be reached. Distinct from an empty book: saying
@@ -81,6 +109,7 @@ export function PropertySearch({
      interactive. components/property-search.test.ts holds this. */
   const urlSearch = useSyncExternalStore(subscribeToUrl, readUrlSearch, readServerUrlSearch);
   const [s, setS] = useState<SearchState>(DEFAULT_SEARCH);
+  const [showFilters, setShowFilters] = useState(false);
 
   /* Follow the URL when it moves — on hydration (from empty to the real
      query) and on back and forward. Done during render, React's pattern for
@@ -122,6 +151,8 @@ export function PropertySearch({
     () => [...new Set(listings.map((l) => l.property_type).filter(Boolean))].sort(),
     [listings],
   );
+  // lib/search.ts — the areas the book is actually filed under.
+  const areas = useMemo(() => areaOptionsFor(listings), [listings]);
   // lib/search.ts — a development contributes no bedroom count: its own is
   // the one figure every other surface withholds.
   const bedOptions = useMemo(() => bedroomOptionsFor(listings), [listings]);
@@ -135,17 +166,23 @@ export function PropertySearch({
   // something, or it is a filter that can only return an empty page.
   const priceSteps = useMemo(() => priceStepsFor(prices), [prices]);
 
-  /* A type the book does not hold filters nothing and shows no chip: a stale
-     link to a type that has since sold should show the book, not a blank. */
+  /* A type or an area the book does not hold filters nothing and shows no
+     chip: a stale link to a type that has since sold should show the book,
+     not a blank. The area is matched without case, since a URL is typed. */
   const effective: SearchState = useMemo(
-    () => ({ ...s, type: types.includes(s.type) ? s.type : "" }),
-    [s, types],
+    () => ({
+      ...s,
+      type: types.includes(s.type) ? s.type : "",
+      area: areas.find((a) => a.toLowerCase() === s.area.toLowerCase()) ?? "",
+    }),
+    [s, types, areas],
   );
 
   const results = useMemo(() => {
     const needle = effective.q.trim().toLowerCase();
     const filtered = listings.filter((l) => {
       if (effective.type && l.property_type !== effective.type) return false;
+      if (!matchesArea(l, effective.area)) return false;
       if (!matchesBedrooms(l, effective.beds)) return false;
       if (!matchesMaxPrice(l, effective.max)) return false;
       if (needle) {
@@ -168,6 +205,9 @@ export function PropertySearch({
 
   const chips = activeFilters(effective);
   const filtering = chips.length > 0;
+  /* What the folded controls are doing right now, for the toggle's label —
+     the search box is always visible, so its chip does not count here. */
+  const foldedActive = chips.filter((c) => c.key !== "q").length;
   /* One card in a three-column grid floats in dead space. A small portfolio
      gets a layout built for its size instead — which reads as deliberate,
      where a mostly-empty grid reads as a business with nothing to sell. */
@@ -184,24 +224,15 @@ export function PropertySearch({
   const controls =
     1 +
     (types.length > 1 ? 1 : 0) +
+    (areas.length > 1 ? 1 : 0) +
     (bedOptions.length > 1 ? 1 : 0) +
     (priceSteps.length > 0 ? 1 : 0) +
     (showSort ? 1 : 0);
-  /* The text input spans two tracks; every other control takes one. Five
-     controls therefore need six tracks, four need five (live-ui-3, measured
-     2026-09-06: on a four-track grid the fourth control wrapped alone). */
-  const barCols =
-    controls >= 5
-      ? "sm:grid-cols-2 lg:grid-cols-6"
-      : controls === 4
-        ? "sm:grid-cols-2 lg:grid-cols-5"
-        : controls === 3
-          ? "sm:grid-cols-3"
-          : controls === 2
-            ? "sm:grid-cols-2"
-            : "";
+  const barCols = BAR_COLS[controls >= 4 ? controls + 1 : controls] ?? "";
+  /* 16 px on a phone: Safari zooms the page into any field set smaller when
+     it is focused, and every field here was 14 (measured 2026-09-13). */
   const field =
-    "h-11 w-full border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
+    "h-11 w-full border border-line-strong bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus:border-accent sm:text-sm";
 
   const set = <K extends keyof SearchState>(key: K, value: SearchState[K]) =>
     setS((current) => ({ ...current, [key]: value }));
@@ -222,71 +253,114 @@ export function PropertySearch({
           />
         </label>
 
-        {types.length > 1 ? (
-          <label>
-            <span className="sr-only">Property type</span>
-            <select name="type" value={effective.type} onChange={(e) => set("type", e.target.value)} className={field}>
-              <option value="">Any type</option>
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {label(t)}
-                </option>
-              ))}
-            </select>
-          </label>
+        {controls > 1 ? (
+          <button
+            type="button"
+            onClick={() => setShowFilters((open) => !open)}
+            aria-expanded={showFilters}
+            aria-controls="search-filters"
+            className="flex min-h-11 items-center justify-between gap-3 border border-line-strong bg-surface px-3 text-base text-ink sm:hidden"
+          >
+            <span>{showFilters ? "Hide filters" : "Filters & sort"}</span>
+            {foldedActive > 0 ? (
+              <span className="text-sm text-accent tabular-nums">{foldedActive} active</span>
+            ) : (
+              <span aria-hidden="true" className="text-ink-3">
+                {showFilters ? "−" : "+"}
+              </span>
+            )}
+          </button>
         ) : null}
 
-        {bedOptions.length > 1 ? (
-          <label>
-            <span className="sr-only">Minimum bedrooms</span>
-            <select name="beds" value={s.beds} onChange={(e) => set("beds", e.target.value)} className={field}>
-              <option value="">Any bedrooms</option>
-              {bedOptions.map((b) => (
-                <option key={b} value={b}>
-                  {b}+ bedrooms
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+        {/* sm:contents dissolves this wrapper above the fold breakpoint, so
+            the controls are the bar's own grid items there; below it the
+            wrapper is what the button above shows and hides. */}
+        <div id="search-filters" className={`${showFilters ? "grid" : "hidden"} gap-3 sm:contents`}>
+          {types.length > 1 ? (
+            <label>
+              <span className="sr-only">Property type</span>
+              <select name="type" value={effective.type} onChange={(e) => set("type", e.target.value)} className={field}>
+                <option value="">Any type</option>
+                {types.map((t) => (
+                  <option key={t} value={t}>
+                    {label(t)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
-        {priceSteps.length > 0 ? (
-          <label>
-            <span className="sr-only">Maximum price</span>
-            <select name="max" value={s.max} onChange={(e) => set("max", e.target.value)} className={field}>
-              <option value="">Any price</option>
-              {priceSteps.map((step) => (
-                <option key={step} value={step}>
-                  Up to {moneyShort(step)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+          {areas.length > 1 ? (
+            <label>
+              <span className="sr-only">Area</span>
+              <select name="area" value={effective.area} onChange={(e) => set("area", e.target.value)} className={field}>
+                <option value="">Any area</option>
+                {areas.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
-        {showSort ? (
-          <label>
-            <span className="sr-only">Sort by</span>
-            <select name="sort" value={s.sort} onChange={(e) => set("sort", e.target.value as Sort)} className={field}>
-              {SORTS.map((o) => (
-                <option key={o} value={o}>
-                  {SORT_LABELS[o]}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+          {bedOptions.length > 1 ? (
+            <label>
+              <span className="sr-only">Minimum bedrooms</span>
+              <select name="beds" value={s.beds} onChange={(e) => set("beds", e.target.value)} className={field}>
+                <option value="">Any bedrooms</option>
+                {bedOptions.map((b) => (
+                  <option key={b} value={b}>
+                    {b}+ bedrooms
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {priceSteps.length > 0 ? (
+            <label>
+              <span className="sr-only">Maximum price</span>
+              <select name="max" value={s.max} onChange={(e) => set("max", e.target.value)} className={field}>
+                <option value="">Any price</option>
+                {priceSteps.map((step) => (
+                  <option key={step} value={step}>
+                    Up to {moneyShort(step)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {showSort ? (
+            <label>
+              <span className="sr-only">Sort by</span>
+              <select name="sort" value={s.sort} onChange={(e) => set("sort", e.target.value as Sort)} className={field}>
+                {SORTS.map((o) => (
+                  <option key={o} value={o}>
+                    {SORT_LABELS[o]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
       </div>
 
       {filtering ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" aria-label="Active filters">
+          {results.length > 0 ? (
+            <p className="mr-1 text-ink-3 tabular-nums" aria-live="polite">
+              {resultCountLabel(results.length)}
+            </p>
+          ) : null}
           {chips.map((chip) => (
             <button
               key={chip.key}
               type="button"
               onClick={() => set(chip.key, "" as never)}
               aria-label={`Remove filter: ${chip.label}`}
-              className="inline-flex items-center gap-1.5 border border-line-strong bg-surface px-2.5 py-1 text-ink-2 hover:border-accent hover:text-accent"
+              className="inline-flex min-h-9 items-center gap-1.5 border border-line-strong bg-surface px-2.5 py-1 text-ink-2 hover:border-accent hover:text-accent"
             >
               {chip.label}
               <span aria-hidden="true">×</span>
@@ -295,7 +369,7 @@ export function PropertySearch({
           <button
             type="button"
             onClick={() => setS({ ...DEFAULT_SEARCH, sort: s.sort })}
-            className="px-1 text-accent underline underline-offset-2 hover:text-accent-hover"
+            className="inline-flex min-h-9 items-center px-1 text-accent underline underline-offset-2 hover:text-accent-hover"
           >
             Clear all
           </button>

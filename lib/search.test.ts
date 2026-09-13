@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { Listing } from "@/lib/crm";
 import { priceLabel } from "@/lib/format";
 import {
+  areaOptionsFor,
   bedroomOptionsFor,
+  matchesArea,
   matchesBedrooms,
   matchesMaxPrice,
   priceStepsFor,
+  resultCountLabel,
   salePrice,
 } from "./search";
 
@@ -154,6 +157,37 @@ describe("a studio is a dwelling with no bedroom, not a dwelling with no bedroom
   it("fails a 1+ filter and passes no filter", () => {
     expect(matchesBedrooms(studio, "1")).toBe(false);
     expect(matchesBedrooms(studio, "")).toBe(true);
+  });
+});
+
+describe("the area control is built from where the book is actually filed", () => {
+  const inPeyia = { area: { en: "Peyia / Coral Bay" } } as unknown as Listing;
+  const inKato = { area: { en: "Kato Paphos" } } as unknown as Listing;
+  const unfiled = { area: null } as unknown as Listing;
+
+  it("offers each area once, sorted, and never an empty one", () => {
+    // The live book on 2026-09-13: a buyer wanting only Kato Paphos had to
+    // type it into the search box.
+    expect(areaOptionsFor([inPeyia, inKato, inPeyia, unfiled])).toEqual(["Kato Paphos", "Peyia / Coral Bay"]);
+  });
+
+  it("matches without regard to case, because a URL is typed by people", () => {
+    expect(matchesArea(inKato, "kato paphos")).toBe(true);
+    expect(matchesArea(inPeyia, "Kato Paphos")).toBe(false);
+  });
+
+  it("leaves an unfiled listing in the results when no area is chosen, and out when one is", () => {
+    expect(matchesArea(unfiled, "")).toBe(true);
+    expect(matchesArea(unfiled, "Kato Paphos")).toBe(false);
+  });
+});
+
+describe("what the chip row says while a filter is on", () => {
+  it("counts what the filter matched, in the plural the book needs", () => {
+    // "Listings", not "properties": a plot and a development sit on the book
+    // beside the villas.
+    expect(resultCountLabel(2)).toBe("2 listings match");
+    expect(resultCountLabel(1)).toBe("1 listing matches");
   });
 });
 

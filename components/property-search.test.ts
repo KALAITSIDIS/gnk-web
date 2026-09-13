@@ -47,8 +47,10 @@ const listing = (over: Partial<Listing>): Listing =>
     ...over,
   }) as unknown as Listing;
 
+/* The live book of 2026-09-13, including where each is filed: two areas, so
+   the area control has more than one answer and renders. */
 const BOOK = [
-  listing({ reference: "PAF0004", property_type: "apartment", asking_price: 285_000, bedrooms: 2, bathrooms: 1, covered_area_sqm: 92 }),
+  listing({ reference: "PAF0004", property_type: "apartment", area: { en: "Kato Paphos" }, asking_price: 285_000, bedrooms: 2, bathrooms: 1, covered_area_sqm: 92 }),
   listing({ reference: "PAF0003", property_type: "land", asking_price: 780_000, plot_area_sqm: 980 }),
   listing({ reference: "PAF0001", property_type: "villa", asking_price: 450_000, bedrooms: 3, bathrooms: 3, covered_area_sqm: 185 }),
 ];
@@ -57,7 +59,7 @@ const render = (search: string) => {
   state.search = search;
   return renderToStaticMarkup(createElement(PropertySearch, { listings: BOOK }));
 };
-/** Card order by reference — a card links to its page twice (photo and title), so dedupe in order. */
+/** Card order by reference — one link per card, deduped anyway so the helper does not depend on it. */
 const cards = (html: string) => [
   ...new Set([...html.matchAll(/href="\/properties\/(PAF\d{4})"/g)].map((m) => m[1]!)),
 ];
@@ -117,5 +119,59 @@ describe("the one-answer rule still holds", () => {
       createElement(PropertySearch, { listings: [BOOK[0]!, listing({ reference: "PAF0009", property_type: "villa", asking_price: null })] }),
     );
     expect(html).not.toMatch(/name="sort"/);
+  });
+
+  it("offers an area control only when the book is filed under more than one area", () => {
+    const two = render("");
+    expect(two).toMatch(/<select[^>]*name="area"/);
+    expect(two).toMatch(/>Kato Paphos</);
+    expect(two).toMatch(/>Peyia \/ Coral Bay</);
+
+    const one = renderToStaticMarkup(
+      createElement(PropertySearch, { listings: [BOOK[1]!, BOOK[2]!] }),
+    );
+    expect(one).not.toMatch(/name="area"/);
+  });
+});
+
+describe("the bar on a phone", () => {
+  /* Measured on an iPhone 13 viewport, 2026-09-13: five stacked controls
+     made a 302 px block, and the first property card began at 819 px on a
+     664 px screen. The search box stays; the rest folds behind one row. */
+  const html = render("");
+
+  it("folds every control but the search box behind a toggle, closed by default", () => {
+    const toggle = /<button[^>]*aria-controls="search-filters"[^>]*>/.exec(html);
+    expect(toggle, "a toggle that names the folded region").not.toBeNull();
+    expect(toggle![0]).toMatch(/aria-expanded="false"/);
+    expect(toggle![0]).toMatch(/\bsm:hidden\b/);
+    expect(toggle![0]).toMatch(/\bmin-h-11\b/);
+    const region = /<div id="search-filters" class="([^"]*)"/.exec(html);
+    expect(region, "the folded region").not.toBeNull();
+    expect(region![1]).toMatch(/\bhidden\b/);
+    // Above the fold breakpoint the wrapper dissolves and the controls are
+    // the bar's own grid items again.
+    expect(region![1]).toMatch(/\bsm:contents\b/);
+  });
+
+  it("keeps the search box outside the fold", () => {
+    const region = html.indexOf('id="search-filters"');
+    const search = html.indexOf('name="q"');
+    expect(search).toBeGreaterThan(0);
+    expect(search).toBeLessThan(region);
+  });
+
+  it("sets every field at 16 px on a phone, so Safari does not zoom on focus", () => {
+    const fields = [...html.matchAll(/<(?:input|select) [^>]*class="([^"]*)"/g)]
+      .map((m) => m[1]!)
+      .filter((cls) => cls.includes("placeholder:text-ink-3"));
+    expect(fields.length).toBeGreaterThan(1);
+    for (const cls of fields) expect(cls, cls).toMatch(/\btext-base\b/);
+  });
+
+  it("prints no result count on the unfiltered book", () => {
+    // The count is feedback for a filter, never a statement of how much the
+    // firm holds — the server render is always the unfiltered book.
+    expect(html).not.toMatch(/listings? match/);
   });
 });

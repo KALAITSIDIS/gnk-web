@@ -11,6 +11,7 @@ import {
   BUYER_KEYS,
   BUY_TIMINGS,
   DEED_REQUIRED,
+  INTENTS,
   LOOKING_TO,
   messageBudget,
   DEED_STATUSES,
@@ -43,6 +44,12 @@ export function EnquiryForm({
   areas = AREAS,
   /* The listing page's absolute address, for the WhatsApp text. */
   listingUrl,
+  /* The in-page anchor that leads here ("#enquire" on a listing page, from
+     the sticky bar's Enquire). A fragment jump scrolls the target into view
+     but moves focus nowhere, so a person arrived at a form with nothing
+     focused (measured 2026-09-13). With JavaScript the name field takes
+     focus on that jump; without it the jump still lands. */
+  focusOnHash,
 }: {
   reference?: string;
   listingUrl?: string;
@@ -51,6 +58,7 @@ export function EnquiryForm({
   cta?: string;
   variant?: "buyer" | "seller";
   areas?: Record<string, string[]>;
+  focusOnHash?: string;
 }) {
   const seller = variant === "seller";
   const buyer = variant === "buyer";
@@ -62,6 +70,8 @@ export function EnquiryForm({
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string | null>(null);
   const sentRef = useRef<HTMLDivElement | null>(null);
+  const nameRef = useRef<HTMLInputElement | null>(null);
+  const messageRef = useRef<HTMLTextAreaElement | null>(null);
 
   /* Submitting blurs the button the browser was focused on, and the form it
      belonged to is then replaced outright — so without this a screen-reader
@@ -71,6 +81,29 @@ export function EnquiryForm({
   useEffect(() => {
     if (state === "sent") sentRef.current?.focus();
   }, [state]);
+
+  useEffect(() => {
+    if (!focusOnHash) return;
+    const focusIfTargeted = () => {
+      // preventScroll: the browser has already scrolled to the anchor, with
+      // the header's scroll padding respected; a second scroll to the input
+      // would undo that.
+      if (window.location.hash === focusOnHash) nameRef.current?.focus({ preventScroll: true });
+    };
+    focusIfTargeted();
+    window.addEventListener("hashchange", focusIfTargeted);
+    return () => window.removeEventListener("hashchange", focusIfTargeted);
+  }, [focusOnHash]);
+
+  /* An opener is appended, never substituted: a person who has typed
+     something and then taps "Arrange a viewing" keeps what they wrote. */
+  function addIntent(sentence: string) {
+    const t = messageRef.current;
+    if (!t) return;
+    const own = t.value.trimEnd();
+    t.value = own ? `${own}\n${sentence}` : sentence;
+    t.focus();
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -149,8 +182,10 @@ export function EnquiryForm({
     );
   }
 
+  /* 16 px on a phone: Safari zooms the page into any field set smaller when
+     it is focused, and every field here was 14 (measured 2026-09-13). */
   const field =
-    "h-11 w-full border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent";
+    "h-11 w-full border border-line-strong bg-surface px-3 text-base text-ink placeholder:text-ink-3 focus:border-accent sm:text-sm";
 
   return (
         /* action and method are the no-JavaScript path, and they are not
@@ -175,7 +210,7 @@ export function EnquiryForm({
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <label className="sm:col-span-2">
           <span className="mb-1 block text-sm text-ink-2">Your name</span>
-          <input name="name" required maxLength={200} className={field} autoComplete="name" />
+          <input ref={nameRef} name="name" required maxLength={200} className={field} autoComplete="name" />
         </label>
         <label>
           <span className="mb-1 block text-sm text-ink-2">Email</span>
@@ -183,17 +218,37 @@ export function EnquiryForm({
         </label>
         <label>
           <span className="mb-1 block text-sm text-ink-2">Phone</span>
-          <input name="phone" maxLength={40} className={field} autoComplete="tel" />
+          {/* type and inputMode together: the telephone keyboard on a phone,
+              and no validation the route does not already do. */}
+          <input name="phone" type="tel" inputMode="tel" maxLength={40} className={field} autoComplete="tel" />
         </label>
+        {reference ? (
+          <div className="sm:col-span-2" role="group" aria-label="Common requests">
+            <p className="mb-1.5 text-sm text-ink-2">Tap to add to your message</p>
+            <div className="flex flex-wrap gap-2">
+              {INTENTS.map((intent) => (
+                <button
+                  key={intent.label}
+                  type="button"
+                  onClick={() => addIntent(intent.message(reference))}
+                  className="inline-flex min-h-11 items-center border border-line-strong bg-surface px-3 text-sm text-ink-2 hover:border-accent hover:text-accent"
+                >
+                  {intent.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <label className="sm:col-span-2">
           <span className="mb-1 block text-sm text-ink-2">
             What can we help with?
           </span>
           <textarea
+            ref={messageRef}
             name="message"
             rows={4}
             maxLength={messageBudget(variant ?? null)}
-            className="w-full border border-line-strong bg-surface p-3 text-sm text-ink placeholder:text-ink-3 focus:border-accent"
+            className="w-full border border-line-strong bg-surface p-3 text-base text-ink placeholder:text-ink-3 focus:border-accent sm:text-sm"
           />
         </label>
       </div>
@@ -201,7 +256,7 @@ export function EnquiryForm({
       {seller ? (
         <fieldset className="mt-6 border-t border-line pt-5">
           <legend className="text-sm font-medium text-ink">About the property</legend>
-          <p className="mt-1 text-xs text-ink-3">
+          <p className="mt-1 text-sm text-ink-3">
             Every one of these is optional. Tell us what you know and leave the rest — we
             will ask about anything that matters.
           </p>
@@ -303,7 +358,7 @@ export function EnquiryForm({
       {buyer ? (
         <fieldset className="mt-6 border-t border-line pt-5">
           <legend className="text-sm font-medium text-ink">What you are looking for</legend>
-          <p className="mt-1 text-xs text-ink-3">
+          <p className="mt-1 text-sm text-ink-3">
             All optional. Even a rough answer helps us tell you about things before they are
             listed — a good deal of what we place never appears publicly.
           </p>
@@ -426,7 +481,7 @@ export function EnquiryForm({
 
       {/* These were plain text. On the device most people read this on, an
           un-linked phone number is a number nobody rings. */}
-      <p className="mt-3 text-xs text-ink-3">
+      <p className="mt-3 text-sm text-ink-3">
         Or call{" "}
         <a href={site.contact.phoneHref} className="text-accent underline">
           {site.contact.phone}

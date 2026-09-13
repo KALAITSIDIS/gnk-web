@@ -62,6 +62,37 @@ describe("the two families carry all three scripts", () => {
   });
 });
 
+describe("the display face ships as the two static weights the site sets", () => {
+  /* Measured from Google Fonts 2026-09-13, the latin face alone: 110 KB as
+     the variable font with its optical-size axis (what the h1 waited for,
+     at a mobile LCP of 4.3 s), 52 KB variable without it, 22 KB as a static
+     500. The site sets the display face at 500 (headings, prices) and 600
+     (the wordmark, a card's price) and nothing else. */
+  const call = /Literata\(\{([\s\S]*?)\}\)/.exec(layout);
+
+  it("asks for 500 and 600, and no axis", () => {
+    expect(call, "Literata(...) is called").not.toBeNull();
+    const weight = /weight:\s*\[([^\]]*)\]/.exec(call![1]!);
+    expect(weight, "Literata declares its weights").not.toBeNull();
+    const asked = [...weight![1]!.matchAll(/"(\d+)"/g)].map((m) => m[1]).sort();
+    expect(asked).toEqual(["500", "600"]);
+    expect(call![1]).not.toMatch(/axes:/);
+  });
+
+  it("nothing sets the display face heavier than the 600 that ships", () => {
+    // A weight the file does not carry is synthesised by the browser —
+    // smeared strokes on the largest type on the page.
+    for (const file of ["app/page.tsx", "components/property-card.tsx", "components/site-header.tsx", "components/site-footer.tsx"]) {
+      const src = readFileSync(join(root, file), "utf-8");
+      for (const m of src.matchAll(/className="([^"]*)"/g)) {
+        const cls = m[1]!;
+        if (cls.includes("font-display")) expect(cls, `${file}: ${cls}`).not.toMatch(/\bfont-(bold|extrabold|black)\b/);
+      }
+    }
+    expect(css).toMatch(/h1, h2, h3 \{[^}]*font-weight:\s*500/);
+  });
+});
+
 describe("the post-build check reads the emitted CSS", () => {
   it("runs after every build", () => {
     expect(pkg.scripts.postbuild).toMatch(/check-fonts\.mjs/);

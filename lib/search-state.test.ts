@@ -57,27 +57,47 @@ describe("reading search state from a URL", () => {
     expect(parseSearchState(new URLSearchParams(""))).toEqual({
       q: "",
       type: "",
+      area: "",
       beds: "",
       max: "",
       sort: "newest",
     });
   });
 
-  it("takes the four filters and the sort back", () => {
-    expect(parseSearchState(new URLSearchParams("q=peyia&type=villa&beds=3&max=500000&sort=price-asc"))).toEqual(
-      { q: "peyia", type: "villa", beds: "3", max: "500000", sort: "price-asc" },
-    );
+  it("takes the five filters and the sort back", () => {
+    expect(
+      parseSearchState(
+        new URLSearchParams("q=peyia&type=villa&area=Peyia+%2F+Coral+Bay&beds=3&max=500000&sort=price-asc"),
+      ),
+    ).toEqual({
+      q: "peyia",
+      type: "villa",
+      area: "Peyia / Coral Bay",
+      beds: "3",
+      max: "500000",
+      sort: "price-asc",
+    });
   });
 
   it("refuses what is not a number, a known sort, or a plausible type — the URL is caller text", () => {
     const s = parseSearchState(
-      new URLSearchParams("beds=three&max=1e9&sort=cheapest&type=<script>&q=" + "x".repeat(300)),
+      new URLSearchParams(
+        "beds=three&max=1e9&sort=cheapest&type=<script>&area=<script>&q=" + "x".repeat(300),
+      ),
     );
     expect(s.beds).toBe("");
     expect(s.max).toBe("");
     expect(s.sort).toBe("newest");
     expect(s.type).toBe("");
+    expect(s.area).toBe("");
     expect(s.q.length).toBeLessThanOrEqual(120);
+  });
+
+  it("takes an area in the CRM's own spelling, in any script", () => {
+    // The feed's names carry a slash and spaces; a Greek area name is letters
+    // the Latin-only type pattern would refuse.
+    expect(parseSearchState(new URLSearchParams("area=Tala+%2F+Tsada")).area).toBe("Tala / Tsada");
+    expect(parseSearchState(new URLSearchParams("area=Πέγεια")).area).toBe("Πέγεια");
   });
 });
 
@@ -87,13 +107,13 @@ describe("writing search state to a URL", () => {
   });
 
   it("writes only what differs from the default, in a stable order", () => {
-    expect(serializeSearchState({ q: "", type: "villa", beds: "", max: "500000", sort: "price-desc" })).toBe(
-      "type=villa&max=500000&sort=price-desc",
-    );
+    expect(
+      serializeSearchState({ q: "", type: "villa", area: "", beds: "", max: "500000", sort: "price-desc" }),
+    ).toBe("type=villa&max=500000&sort=price-desc");
   });
 
   it("round-trips", () => {
-    const qs = "q=coral+bay&type=apartment&beds=2&max=750000&sort=price-asc";
+    const qs = "q=coral+bay&type=apartment&area=Kato+Paphos&beds=2&max=750000&sort=price-asc";
     expect(serializeSearchState(parseSearchState(new URLSearchParams(qs)))).toBe(qs);
   });
 });
@@ -133,10 +153,18 @@ describe("the chips a person can remove", () => {
   });
 
   it("names each active filter in the words the controls use, and never the sort", () => {
-    const chips = activeFilters({ q: "peyia", type: "villa", beds: "3", max: "500000", sort: "price-asc" });
+    const chips = activeFilters({
+      q: "peyia",
+      type: "villa",
+      area: "Kato Paphos",
+      beds: "3",
+      max: "500000",
+      sort: "price-asc",
+    });
     expect(chips).toEqual([
       { key: "q", label: "“peyia”" },
       { key: "type", label: "Villa" },
+      { key: "area", label: "Kato Paphos" },
       { key: "beds", label: "3+ bedrooms" },
       { key: "max", label: "Up to €500k" },
     ]);

@@ -43,6 +43,10 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    /* The header is sticky (components/site-header.tsx). Without this an
+       in-page anchor — the listing page's #enquire, the skip link's #main —
+       scrolls its target to the very top, where the header covers it. */
+    scroll-padding-top: 5rem;
   }
   body {
     background: var(--color-paper);
@@ -71,22 +75,20 @@
 }
 
 @layer components {
-  /* An uppercase label needs air or it reads as shouting. */
+  /* An uppercase label needs air or it reads as shouting. 12 px is the
+     site's floor (lib/type-floor.test.ts); it was 11. */
   .eyebrow {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--color-ink-3);
   }
+  /* Where a photograph will be. A plain surface, not a dashed wireframe box:
+     the dashes and stripes said "unfinished" on every card, and --color-ink-3
+     on this ground measured 4.23:1 at 14 px, under the 4.5:1 floor
+     (2026-09-13). --color-ink-2 clears it; lib/contrast.test.ts measures. */
   .placeholder {
-    border: 1px dashed var(--color-line-2);
-    background: repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent 8px,
-      var(--color-surface-2) 8px,
-      var(--color-surface-2) 16px
-    );
-    color: var(--color-ink-3);
+    background: var(--color-surface-2);
+    color: var(--color-ink-2);
   }
 }

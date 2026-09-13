@@ -28,6 +28,12 @@ export const metadata: Metadata = {
  */
 export default async function HomePage() {
   const feed = await getListings();
+  /* A principal appears the day lib/site.ts carries a name. Until then the
+     section keeps its heading and its promise and draws no card: two boxes
+     reading "Name to follow" under "Two names, on every mandate" read as
+     evasion to exactly the reader the copy is written for (measured live,
+     2026-09-13). app/placeholders.test.ts holds this for every page. */
+  const principals = site.principals.filter((p) => p.name);
 
   return (
     <>
@@ -114,23 +120,21 @@ export default async function HomePage() {
           You will not be handed to an account manager. The person who values your property
           is the person who negotiates it.
         </p>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2">
-          {site.principals.map((p, i) => (
-            <div key={i} className="border border-line bg-surface p-6">
-              <div className="placeholder flex h-40 items-center justify-center text-xs">
-                Photograph to follow
+        {principals.length > 0 ? (
+          <div className="mt-8 grid gap-6 sm:grid-cols-2">
+            {principals.map((p) => (
+              <div key={p.name} className="border border-line bg-surface p-6">
+                <p className="font-display text-lg text-ink">{p.name}</p>
+                {p.role ? <p className="text-sm text-ink-3">{p.role}</p> : null}
+                {p.bio ? <p className="mt-3 text-sm text-ink-2">{p.bio}</p> : null}
               </div>
-              <p className="mt-4 font-display text-lg text-ink">
-                {p.name ?? <span className="text-ink-3">Name to follow</span>}
-              </p>
-              {p.role ? <p className="text-sm text-ink-3">{p.role}</p> : null}
-              <p className="mt-3 text-sm text-ink-2">
-                {p.bio ?? "Biography to follow."}
-              </p>
-            </div>
-          ))}
-        </div>
-        <Link href="/about" className="mt-6 inline-block text-sm font-medium text-accent hover:text-accent-hover">
+            ))}
+          </div>
+        ) : null}
+        <Link
+          href="/about"
+          className="mt-6 inline-flex min-h-11 items-center text-sm font-medium text-accent hover:text-accent-hover"
+        >
           More about the firm →
         </Link>
       </section>
