@@ -47,7 +47,14 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { reference } = await params;
   const found = await getListing(reference);
-  if (!found.ok || !found.listing) return { title: "Property not found" };
+  /* The page below refuses to 404 when the feed is unreachable, and the title
+     refuses in the same way: a transient timeout during a build used to bake
+     "Property not found" into a page whose content was fine (Supabase logs,
+     2026-09-13 — three 504s in the minute of a site build). Without the feed
+     the reference is the one true thing known here; "not found" is only for a
+     feed that ANSWERED and holds no such listing. */
+  if (!found.ok) return { title: reference };
+  if (!found.listing) return { title: "Property not found" };
   const l = found.listing;
   const description = text(l.short_description) || text(l.public_description).slice(0, 200) || placeLine(l);
   /* A listing is the most-shared page on the site, and it had neither a
