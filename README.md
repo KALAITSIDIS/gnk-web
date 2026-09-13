@@ -32,10 +32,11 @@ deliberate; do not trade it away for convenience.
 The first secret is `CRM_FORWARD_KEY` (since 2026-09-06). It proves to the
 CRM that a request came through this site: on an enquiry the CRM then meters
 the visitor we forward rather than the whole site as one address, and on a
-feed read (since 2026-09-13) it meters the site on its own, larger budget
-instead of the one a stranger gets. It opens no door and reads nothing: an
-attacker holding it gains a per-visitor enquiry budget of five and a bigger
-allowance of a public feed.
+feed read (since 2026-09-13) it exempts the site from the per-address meter a
+stranger gets — a build reads every listing at once, and a shared counter row
+serialised it into timeouts. It opens no door and reads nothing: an attacker
+holding it gains a per-visitor enquiry budget of five and unmetered reads of
+a public feed.
 
 The second is `SITE_REVALIDATE_KEY` (since 2026-09-13). It proves to THIS
 site that a knock on `/api/revalidate` came from the CRM, which knocks after

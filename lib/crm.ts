@@ -23,9 +23,10 @@ const ORG = process.env.CRM_ORG_SLUG ?? "gnk";
 /**
  * The site's proof of identity to the CRM, read at call time as the platform
  * binds it. On an enquiry it makes the CRM meter the visitor we forward rather
- * than our one egress address; on a feed read it puts the site on its own,
- * larger budget instead of the 120-per-quarter-hour a stranger gets (the CRM's
- * REL-03). Unset, both fall back to being metered as a stranger — weaker, not
+ * than our one egress address; on a feed read it exempts the site from the
+ * 120-per-quarter-hour meter a stranger gets (the CRM's REL-03, second pass —
+ * a build reads every listing at once and the shared counter row serialised
+ * it). Unset, both fall back to being metered as a stranger — weaker, not
  * broken. It opens nothing.
  */
 const forwardKey = () => process.env.CRM_FORWARD_KEY ?? "";
