@@ -4,7 +4,6 @@ import { getListings } from "@/lib/crm";
 import { OrganizationJsonLd } from "@/components/org-json-ld";
 import { pageMeta } from "@/lib/site-url";
 import { site } from "@/lib/site";
-import { Suspense } from "react";
 import { PropertySearch } from "@/components/property-search";
 
 // A literal, not the imported constant: Next analyses segment config
@@ -42,13 +41,12 @@ export default async function HomePage() {
           <p className="mt-4 max-w-2xl text-lg text-ink-2">{site.positioning}</p>
 
           <div className="mt-9">
-            {/* The search reads its state from the URL (useSearchParams), which a
-                prerendered page can only do inside a Suspense boundary; the
-                fallback is never seen, the boundary is what lets the page
-                stay static. */}
-            <Suspense fallback={null}>
-              <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
-            </Suspense>
+            {/* No Suspense boundary and no useSearchParams here, on purpose: with
+                them Next prerendered the fallback and the live pages shipped
+                with no listing cards in their HTML (2026-09-13). The search
+                reads the URL after hydration; the server render is the whole
+                book. components/property-search.test.ts holds this. */}
+            <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
           </div>
         </div>
       </section>

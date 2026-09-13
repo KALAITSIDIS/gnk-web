@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Listing } from "@/lib/crm";
 import { label, moneyShort, placeLine, text, titleOf } from "@/lib/format";
 import {
@@ -37,10 +36,10 @@ import { PropertyCard } from "@/components/property-card";
  * rule: it appears once two listings carry a sale price.
  *
  * THE STATE LIVES IN THE URL (2026-09-13, audit WEB-04). `?q&type&beds&max&
- * sort` is read on arrival — so a shared or bookmarked link, a reload and the
- * back button all restore the view — and written back with the native
+ * sort` is read after hydration — so a shared or bookmarked link, a reload
+ * and the back button all restore the view — and written back with the native
  * history.replaceState as the controls change, debounced so typing does not
- * write a URL per keystroke. lib/search.ts owns the reading and writing; this file only wires
+ * write a URL per keystroke. The server render is always the whole book. lib/search.ts owns the reading and writing; this file only wires
  * the controls to it. A chip row names what is filtering and lets each filter
  * be removed alone, or all at once.
  */
@@ -53,6 +52,16 @@ const SORT_LABELS: Record<Sort, string> = {
 /** Long enough to type a word, short enough that the address bar keeps up. */
 const URL_WRITE_DELAY_MS = 250;
 
+/* The browser's URL as an external store: back and forward are the one way
+   it moves without us. On the server there is no window and the snapshot is
+   empty — so the server render is always the whole book. */
+const subscribeToUrl = (onChange: () => void) => {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+};
+const readUrlSearch = () => window.location.search;
+const readServerUrlSearch = () => "";
+
 export function PropertySearch({
   listings,
   /** The feed could not be reached. Distinct from an empty book: saying
@@ -63,17 +72,35 @@ export function PropertySearch({
   listings: Listing[];
   feedDown?: boolean;
 }) {
-  const params = useSearchParams();
-  const pathname = usePathname();
+  /* NOT useSearchParams. On a prerendered page that hook makes Next render
+     the nearest Suspense fallback into the HTML and the search on the client
+     only — the live home and list pages shipped with no listing cards at all
+     for forty minutes on 2026-09-13. The URL is read here after hydration
+     instead: the server snapshot is empty, so the HTML always carries the
+     whole book, and a filtered deep link is applied the moment the page is
+     interactive. components/property-search.test.ts holds this. */
+  const urlSearch = useSyncExternalStore(subscribeToUrl, readUrlSearch, readServerUrlSearch);
+  const [s, setS] = useState<SearchState>(DEFAULT_SEARCH);
 
-  const [s, setS] = useState<SearchState>(() => parseSearchState(params));
+  /* Follow the URL when it moves — on hydration (from empty to the real
+     query) and on back and forward. Done during render, React's pattern for
+     state that follows external input, not in an effect: an effect would run
+     a render late and, keyed on the state as well, would reset the input to
+     the not-yet-written URL on every keystroke. Our own writes land as a URL
+     equal to the state, so only the memory moves; a URL that differs from
+     the state is a navigation the person made, and the state follows it. */
+  const urlKey = serializeSearchState(parseSearchState(new URLSearchParams(urlSearch)));
+  const [seenUrl, setSeenUrl] = useState(urlKey);
+  if (urlKey !== seenUrl) {
+    setSeenUrl(urlKey);
+    if (urlKey !== serializeSearchState(s)) setS(parseSearchState(new URLSearchParams(urlSearch)));
+  }
 
   /* Write the state to the URL after the controls change — never on mount,
      and never when the URL already says the same thing. The native
-     history.replaceState, which Next keeps in step with useSearchParams: no
-     history entry per keystroke, no server round trip per filter (a
-     router.replace would fetch the page's payload again), and nothing to
-     wait for offline. */
+     history.replaceState: no history entry per keystroke, no server round
+     trip per filter (a router.replace would fetch the page's payload again),
+     and nothing to wait for offline. */
   const mounted = useRef(false);
   useEffect(() => {
     if (!mounted.current) {
@@ -81,27 +108,15 @@ export function PropertySearch({
       return;
     }
     const next = serializeSearchState(s);
-    if (next === serializeSearchState(parseSearchState(params))) return;
-    const t = setTimeout(
-      () => window.history.replaceState(null, "", next ? `${pathname}?${next}` : pathname),
-      URL_WRITE_DELAY_MS,
-    );
+    if (next === serializeSearchState(parseSearchState(new URLSearchParams(window.location.search)))) {
+      return;
+    }
+    const t = setTimeout(() => {
+      const path = window.location.pathname;
+      window.history.replaceState(null, "", next ? `${path}?${next}` : path);
+    }, URL_WRITE_DELAY_MS);
     return () => clearTimeout(t);
-  }, [s, params, pathname]);
-
-  /* Follow the URL when it moves without us — the back and forward buttons.
-     Done during render, React's pattern for state that follows a prop, not
-     in an effect: an effect would run a render late and, keyed on the state
-     as well, would reset the input to the not-yet-written URL on every
-     keystroke. Our own replace() lands as a URL equal to the state, so only
-     the URL memory moves; a URL that differs from the state is a navigation
-     the person made, and the state follows it. */
-  const urlKey = serializeSearchState(parseSearchState(params));
-  const [seenUrl, setSeenUrl] = useState(urlKey);
-  if (urlKey !== seenUrl) {
-    setSeenUrl(urlKey);
-    if (urlKey !== serializeSearchState(s)) setS(parseSearchState(params));
-  }
+  }, [s]);
 
   const types = useMemo(
     () => [...new Set(listings.map((l) => l.property_type).filter(Boolean))].sort(),
