@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -24,5 +25,25 @@ describe("the retention promise on the privacy page", () => {
   it("describes what actually happens — an automatic erasure, not a manual deletion", () => {
     expect(html).toMatch(/automatically/);
     expect(html).not.toMatch(/within two\s+years/);
+  });
+});
+
+/**
+ * Two more things the code does that the notice must say (gnk-crm 0098): the
+ * site keeps a landing campaign in SESSION STORAGE for the visit, and the CRM
+ * sends the enquirer one acknowledgement e-mail. Each is bound to the code
+ * that makes it true, so the sentence cannot outlive the behaviour.
+ */
+describe("what the privacy page says about the session and the acknowledgement", () => {
+  it("discloses the campaign memory, because components/campaign-memory.tsx uses session storage", () => {
+    const memory = readFileSync(new URL("../../components/campaign-memory.tsx", import.meta.url), "utf-8");
+    expect(memory).toContain("sessionStorage");
+    expect(html).toMatch(/session storage/i);
+    // still true, and still said: storage is not a cookie
+    expect(html).toMatch(/sets no cookies/);
+  });
+
+  it("discloses the acknowledgement e-mail the CRM sends", () => {
+    expect(html).toMatch(/confirming that your enquiry arrived/i);
   });
 });

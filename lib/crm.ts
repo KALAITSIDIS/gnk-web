@@ -278,6 +278,14 @@ export interface EnquiryInput {
    * no-JavaScript path, which therefore never retries.
    */
   idempotency_key?: string;
+  /**
+   * The brief and its provenance as data (gnk-crm 0098): the form's select
+   * values, the page, the landing campaign, the referrer host, the consent
+   * version. The CRM admits each key from its own allowlist and caps it;
+   * nothing personal is ever put here — it lands in a column erasure does not
+   * rewrite.
+   */
+  meta?: Record<string, string>;
 }
 
 /**

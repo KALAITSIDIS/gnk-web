@@ -5,9 +5,13 @@ import { site } from "@/lib/site";
 import {
   assembleMessage,
   BUYER_KEYS,
+  CONSENT_VERSION,
   describeProperty,
   FIELD_CAPS,
   describeRequirement,
+  PROVENANCE_CAPS,
+  PROVENANCE_KEYS,
+  sameSitePath,
   SELLER_KEYS,
   type BuyerFields,
   type SellerFields,
@@ -33,6 +37,16 @@ import {
  */
 export const dynamic = "force-dynamic";
 
+/** A provenance field: optional, trimmed, and silently absent past its cap. */
+const capped = (max: number) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => {
+      const t = v?.trim();
+      return t && t.length <= max ? t : undefined;
+    });
+
 const schema = z.object({
   name: z.string().trim().min(1, "Please tell us your name.").max(200),
   email: z.union([z.email("That email address does not look right."), z.literal("")]).optional(),
@@ -42,6 +56,13 @@ const schema = z.object({
   /** Consent is recorded because the CRM stores personal data (GDPR Art. 6). */
   consent: z.literal(true, { message: "Please confirm you are happy for us to reply." }),
   website: z.string().max(200).optional(),
+  /* Where it came from (gnk-crm 0098). Over the CRM's cap a value is DROPPED,
+     not refused: a campaign name nobody chose must never cost an enquiry. */
+  source_page: capped(PROVENANCE_CAPS.source_page),
+  utm_source: capped(PROVENANCE_CAPS.utm_source),
+  utm_medium: capped(PROVENANCE_CAPS.utm_medium),
+  utm_campaign: capped(PROVENANCE_CAPS.utm_campaign),
+  referrer_host: capped(PROVENANCE_CAPS.referrer_host),
   /* Minted by the form per attempt (gnk-crm 0096): the CRM answers a repeated
      post with the same key with the first lead, so a retry after a timeout
      is the same enquiry. The CRM refuses any other shape; refusing it here
@@ -133,7 +154,9 @@ export async function POST(request: Request) {
       consent: form.get("consent") !== null,
       website: str("website"),
       enquiry_key: str("enquiry_key"),
-      ...Object.fromEntries([...SELLER_KEYS, ...BUYER_KEYS].map((k) => [k, str(k)])),
+      ...Object.fromEntries(
+        [...SELLER_KEYS, ...BUYER_KEYS, ...PROVENANCE_KEYS].map((k) => [k, str(k)]),
+      ),
     };
   } else {
     try {
@@ -163,6 +186,24 @@ export async function POST(request: Request) {
      the first entry is the client, the rest are proxies. */
   const clientIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
 
+  /* The brief as DATA beside the message (gnk-crm 0098, audit LR-01/02): the
+     same select values the text block is written from, plus where it came
+     from. Blanks are omitted; the CRM's door admits each key from its own
+     allowlist and caps it, so this only has to be honest. `source_page` is what
+     the form said; on the no-JavaScript route it is the same-site Referer's
+     path, and never another site's. The consent version is set HERE, from the
+     constant, so a caller cannot claim wording it never saw. */
+  const meta: Record<string, string> = {};
+  for (const k of [...SELLER_KEYS, ...BUYER_KEYS, ...PROVENANCE_KEYS]) {
+    const v = d[k]?.trim();
+    if (v) meta[k] = v;
+  }
+  if (!meta.source_page) {
+    const path = sameSitePath(request.headers.get("referer"), new URL(request.url).host);
+    if (path) meta.source_page = path;
+  }
+  meta.consent_version = CONSENT_VERSION;
+
   const result = await submitEnquiry(
     {
       name: d.name,
@@ -188,6 +229,7 @@ export async function POST(request: Request) {
       property_reference: d.property_reference || undefined,
       website: d.website || undefined,
       idempotency_key: d.enquiry_key || undefined,
+      meta,
     },
     clientIp,
   );

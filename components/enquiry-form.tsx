@@ -20,6 +20,9 @@ import {
   PROPERTY_TYPES,
   SELLER_KEYS,
   TIMINGS,
+  readCampaign,
+  referrerHost,
+  safeSessionStorage,
 } from "@/lib/enquiry-fields";
 
 /**
@@ -181,6 +184,11 @@ export function EnquiryForm({
           consent: form.get("consent") === "on",
           website: form.get("website"),
           enquiry_key: form.get("enquiry_key"),
+          // where this came from (gnk-crm 0098): the page, an external
+          // referrer's host, and the campaign the visit landed with
+          source_page: window.location.pathname,
+          referrer_host: referrerHost(document.referrer, window.location.host),
+          ...readCampaign(safeSessionStorage()),
           ...Object.fromEntries(
             [...SELLER_KEYS, ...BUYER_KEYS].map((k) => [k, form.get(k) ?? ""]),
           ),

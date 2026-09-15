@@ -408,3 +408,16 @@ describe("an enquiry carries its key, and a timed-out post is tried once more wi
     expect(f).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("the brief and its provenance ride in the body as meta (gnk-crm 0098)", () => {
+  it("sends `meta` beside the fields, as one object the CRM's door reads key by key", async () => {
+    const f = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    await submitEnquiry({
+      name: "A Buyer",
+      meta: { budget: "over_1m", source_page: "/properties/PAF0001", utm_source: "instagram" },
+    });
+    const body = JSON.parse(String((f.mock.calls[0]![1] as RequestInit).body));
+    expect(body.meta).toEqual({ budget: "over_1m", source_page: "/properties/PAF0001", utm_source: "instagram" });
+    expect(body.name).toBe("A Buyer");
+  });
+});
