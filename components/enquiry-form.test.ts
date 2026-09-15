@@ -123,3 +123,22 @@ describe("the valuation variant asks what the valuation page promises", () => {
     expect(valuationForm).toMatch(/optional/i);
   });
 });
+
+describe("every attempt carries a key, so a retry is the same enquiry", () => {
+  /* gnk-crm 0096 (integrations audit INT-02): the CRM answers a repeated post
+     with the same key with the first lead. The key is minted in the browser
+     after hydration — a server-rendered value would differ from the client's
+     and mismatch — so the server sends the input EMPTY, and the no-JavaScript
+     path simply posts without one. */
+  it("renders a hidden enquiry_key input, empty on the server, on every variant", () => {
+    for (const [name, html] of [
+      ["listing", listingForm],
+      ["contact", contactForm],
+    ] as const) {
+      const input = /<input[^>]*name="enquiry_key"[^>]*>/.exec(html);
+      expect(input, name).not.toBeNull();
+      expect(input![0], name).toMatch(/type="hidden"/);
+      expect(input![0], name).not.toMatch(/value="[^"]+"/);
+    }
+  });
+});
