@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { submitEnquiry } from "@/lib/crm";
 import { POST } from "./route";
 
 /**
@@ -58,5 +59,54 @@ describe("the site's enquiry door", () => {
   it("accepts with 202 when the CRM accepted", async () => {
     state.result = { ok: true };
     expect((await post(valid)).status).toBe(202);
+  });
+});
+
+/**
+ * The form mints a key per attempt (gnk-crm 0096, integrations audit INT-02);
+ * the route hands it to the CRM as `idempotency_key` on both posting paths, so
+ * a retry after a timeout is the same enquiry and not a second lead.
+ */
+describe("the enquiry key travels", () => {
+  const sent = () => vi.mocked(submitEnquiry).mock.calls.at(-1)![0];
+
+  it("from the JSON post, as idempotency_key", async () => {
+    state.result = { ok: true };
+    vi.mocked(submitEnquiry).mockClear();
+    expect((await post({ ...valid, enquiry_key: "3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50" })).status).toBe(202);
+    expect(sent().idempotency_key).toBe("3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50");
+  });
+
+  it("from the no-JavaScript form post too", async () => {
+    state.result = { ok: true };
+    vi.mocked(submitEnquiry).mockClear();
+    const form = new URLSearchParams({
+      name: "A Buyer",
+      email: "buyer@example.invalid",
+      consent: "on",
+      enquiry_key: "3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50",
+    });
+    const res = await POST(
+      new Request("https://gnk-web.vercel.app/api/enquiry", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(sent().idempotency_key).toBe("3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50");
+  });
+
+  it("is absent rather than empty when the form sent none", async () => {
+    state.result = { ok: true };
+    vi.mocked(submitEnquiry).mockClear();
+    expect((await post({ ...valid, enquiry_key: "" })).status).toBe(202);
+    expect(sent().idempotency_key).toBeUndefined();
+  });
+
+  it("refuses a key the CRM would refuse, before posting anything", async () => {
+    vi.mocked(submitEnquiry).mockClear();
+    expect((await post({ ...valid, enquiry_key: "no spaces!" })).status).toBe(400);
+    expect(submitEnquiry).not.toHaveBeenCalled();
   });
 });

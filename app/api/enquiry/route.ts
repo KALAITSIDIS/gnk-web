@@ -42,6 +42,16 @@ const schema = z.object({
   /** Consent is recorded because the CRM stores personal data (GDPR Art. 6). */
   consent: z.literal(true, { message: "Please confirm you are happy for us to reply." }),
   website: z.string().max(200).optional(),
+  /* Minted by the form per attempt (gnk-crm 0096): the CRM answers a repeated
+     post with the same key with the first lead, so a retry after a timeout
+     is the same enquiry. The CRM refuses any other shape; refusing it here
+     first keeps a malformed key from costing a post. */
+  enquiry_key: z
+    .union([
+      z.string().regex(/^[A-Za-z0-9-]{8,64}$/, "The enquiry key is not in the expected shape."),
+      z.literal(""),
+    ])
+    .optional(),
   /* An owner's answers about their own property, and a buyer's about what they
      want. All optional on purpose: the contact details are what make a lead,
      and a form that refuses to send until someone remembers their plot size is
@@ -122,6 +132,7 @@ export async function POST(request: Request) {
       // an unchecked box is absent from the payload entirely
       consent: form.get("consent") !== null,
       website: str("website"),
+      enquiry_key: str("enquiry_key"),
       ...Object.fromEntries([...SELLER_KEYS, ...BUYER_KEYS].map((k) => [k, str(k)])),
     };
   } else {
@@ -176,6 +187,7 @@ export async function POST(request: Request) {
       ),
       property_reference: d.property_reference || undefined,
       website: d.website || undefined,
+      idempotency_key: d.enquiry_key || undefined,
     },
     clientIp,
   );
