@@ -9,3 +9,6 @@ next-env.d.ts
 AGENTS.md
 CLAUDE.md
 .env*
+
+# Claude Code per-machine settings (never commit)
+.claude/settings.local.json
