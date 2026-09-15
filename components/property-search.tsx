@@ -83,6 +83,9 @@ const subscribeToUrl = (onChange: () => void) => {
 };
 const readUrlSearch = () => window.location.search;
 const readServerUrlSearch = () => "";
+/* A search string as the state would write it back: parsed (validated,
+   trimmed) and re-serialised, so two spellings of one state compare equal. */
+const canonical = (search: string) => serializeSearchState(parseSearchState(new URLSearchParams(search)));
 
 /* The text input spans two tracks; every other control takes one. Five
    controls therefore need six tracks, four need five (live-ui-3, measured
@@ -117,14 +120,25 @@ export function PropertySearch({
   const [showFilters, setShowFilters] = useState(false);
 
   /* Follow the URL when it moves — on hydration (from empty to the real
-     query) and on back and forward. Done during render, React's pattern for
-     state that follows external input, not in an effect: an effect would run
-     a render late and, keyed on the state as well, would reset the input to
-     the not-yet-written URL on every keystroke. Our own writes land as a URL
-     equal to the state, so only the memory moves; a URL that differs from
-     the state is a navigation the person made, and the state follows it. */
-  const urlKey = serializeSearchState(parseSearchState(new URLSearchParams(urlSearch)));
-  const [seenUrl, setSeenUrl] = useState(urlKey);
+     query), on a client-side mount at a filtered URL, and on back and
+     forward. Done during render, React's pattern for state that follows
+     external input, not in an effect: an effect would run a render late and,
+     keyed on the state as well, would reset the input to the not-yet-written
+     URL on every keystroke.
+
+     `seenUrl` starts at the SERVER snapshot, never at whatever the client
+     URL happens to be: initialised from the client URL, a client-side mount
+     at /properties?type=land counted that URL as already seen and showed the
+     whole book. And the component's own write is marked seen where it is
+     made (the timeout below), never here. This block used to assume "our own
+     writes land as a URL equal to the state" — but the write lands 250 ms
+     late, and the render that first read it was the one triggered by the
+     person's NEXT change, when the state had already moved on. So that
+     newer change was replaced by the older URL: "kato" typed at 400 ms a key
+     became "kt", and Villa then Peyia lost the area (measured on production,
+     2026-09-15). components/property-search.client.test.ts holds both. */
+  const urlKey = canonical(urlSearch);
+  const [seenUrl, setSeenUrl] = useState(() => canonical(readServerUrlSearch()));
   if (urlKey !== seenUrl) {
     setSeenUrl(urlKey);
     if (urlKey !== serializeSearchState(s)) setS(parseSearchState(new URLSearchParams(urlSearch)));
@@ -134,7 +148,8 @@ export function PropertySearch({
      and never when the URL already says the same thing. The native
      history.replaceState: no history entry per keystroke, no server round
      trip per filter (a router.replace would fetch the page's payload again),
-     and nothing to wait for offline. */
+     and nothing to wait for offline. The write is marked seen in the same
+     breath, so the block above never mistakes it for a navigation. */
   const mounted = useRef(false);
   useEffect(() => {
     if (!mounted.current) {
@@ -142,12 +157,13 @@ export function PropertySearch({
       return;
     }
     const next = serializeSearchState(s);
-    if (next === serializeSearchState(parseSearchState(new URLSearchParams(window.location.search)))) {
+    if (next === canonical(window.location.search)) {
       return;
     }
     const t = setTimeout(() => {
       const path = window.location.pathname;
       window.history.replaceState(null, "", next ? `${path}?${next}` : path);
+      setSeenUrl(canonical(next));
     }, URL_WRITE_DELAY_MS);
     return () => clearTimeout(t);
   }, [s]);
