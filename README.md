@@ -14,6 +14,13 @@ The site is a CLIENT of the CRM's public API and nothing else:
 | Listings | `GET  {CRM_API_URL}/api/public/listings?org={CRM_ORG_SLUG}` |
 | Enquiries | `POST {CRM_API_URL}/api/public/enquiries` |
 
+Every enquiry the form sends carries an `enquiry_key` the browser mints per
+form, forwarded to the CRM as `idempotency_key` (its migration 0096): the CRM
+answers a repeated post with the same key with the first lead, so the route
+retries a timed-out post exactly once with the same key instead of risking a
+second lead — and never retries without one (the no-JavaScript path posts no
+key). The form waits 20 s for the route, which gives the CRM 8 s twice.
+
 Both are unauthenticated and rate-limited on the CRM side, and each is bounded
 differently — worth stating precisely, because "RLS-bound" stopped being true
 of the second one. The **feed** is an anon-scoped `security definer` function

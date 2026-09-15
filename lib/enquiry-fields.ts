@@ -395,3 +395,126 @@ export function describeRequirement(f: BuyerFields): string | null {
     .filter((l): l is string => l !== null);
   return lines.length ? "What they are looking for\n" + lines.join("\n") : null;
 }
+
+/* ------------------------------------------------------------------------ *
+ * Where the visitor came from (gnk-crm 0098, audit LR-02).
+ *
+ * The CRM's lead carried no source page and no campaign: an Instagram ad, a
+ * Google search and a portal click were one `website`. The site now sends,
+ * beside the message, the page the form was posted from, the campaign the
+ * visit LANDED with (kept in session storage for the visit — components/
+ * campaign-memory.tsx — because the form is rarely on the landing page), the
+ * referring site's host, and the version of the consent wording. Three
+ * campaign keys, capped, nothing personal; every storage access survives a
+ * browser that refuses storage, because a private window is not a bug.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The consent wording as it stands (the checkbox label and /legal). Bump the
+ * date when either changes; the CRM records it on the lead and the contact.
+ */
+export const CONSENT_VERSION = "2026-09-15";
+
+export const CAMPAIGN_KEYS = ["utm_source", "utm_medium", "utm_campaign"] as const;
+export const PROVENANCE_KEYS = ["source_page", ...CAMPAIGN_KEYS, "referrer_host"] as const;
+
+/** The CRM's caps for these keys (gnk-crm lib/services/enquiry-meta.ts); over-cap is dropped, never refused. */
+export const PROVENANCE_CAPS = {
+  source_page: 200,
+  utm_source: 80,
+  utm_medium: 80,
+  utm_campaign: 120,
+  referrer_host: 120,
+} as const;
+
+export const CAMPAIGN_STORAGE_KEY = "gnk-campaign";
+
+type StorageLike = {
+  getItem(key: string): string | null;
+  setItem?(key: string, value: string): void;
+};
+
+/** Only the three campaign keys, trimmed, capped; anything else on the URL is nobody's business. */
+export function campaignFromSearch(search: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(search);
+  } catch {
+    return out;
+  }
+  for (const k of CAMPAIGN_KEYS) {
+    const v = params.get(k)?.trim();
+    if (v && v.length <= PROVENANCE_CAPS[k]) out[k] = v;
+  }
+  return out;
+}
+
+/** Keep a landing campaign for the session. A page with none leaves the remembered one alone. */
+export function rememberCampaign(search: string, storage: StorageLike | null): void {
+  if (!storage?.setItem) return;
+  const campaign = campaignFromSearch(search);
+  if (Object.keys(campaign).length === 0) return;
+  try {
+    storage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(campaign));
+  } catch {
+    // storage refused (quota, private mode): the enquiry still sends, without it
+  }
+}
+
+/** The remembered campaign, or nothing — a missing, refusing or corrupt store is nothing. */
+export function readCampaign(storage: StorageLike | null): Record<string, string> {
+  if (!storage) return {};
+  let raw: string | null;
+  try {
+    raw = storage.getItem(CAMPAIGN_STORAGE_KEY);
+  } catch {
+    return {};
+  }
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, string> = {};
+    for (const k of CAMPAIGN_KEYS) {
+      const v = (parsed as Record<string, unknown>)[k];
+      if (typeof v !== "string") continue;
+      const t = v.trim();
+      if (t && t.length <= PROVENANCE_CAPS[k]) out[k] = t;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** The host that referred the visit, when it was another site; the site's own pages are not a source. */
+export function referrerHost(referrer: string, ownHost: string): string {
+  if (!referrer) return "";
+  try {
+    const host = new URL(referrer).host;
+    return host && host.toLowerCase() !== ownHost.toLowerCase() ? host : "";
+  } catch {
+    return "";
+  }
+}
+
+/** The path of a same-site Referer — the no-JavaScript route's only way to know which page posted. */
+export function sameSitePath(referer: string | null | undefined, ownHost: string): string {
+  if (!referer) return "";
+  try {
+    const u = new URL(referer);
+    return u.host.toLowerCase() === ownHost.toLowerCase() ? u.pathname : "";
+  } catch {
+    return "";
+  }
+}
+
+/** The browser's session storage, or null where it is absent or refuses (private windows throw). */
+export function safeSessionStorage(): StorageLike | null {
+  try {
+    return typeof window !== "undefined" ? window.sessionStorage : null;
+  } catch {
+    return null;
+  }
+}

@@ -20,6 +20,9 @@ import {
   PROPERTY_TYPES,
   SELLER_KEYS,
   TIMINGS,
+  readCampaign,
+  referrerHost,
+  safeSessionStorage,
 } from "@/lib/enquiry-fields";
 
 /**
@@ -93,6 +96,18 @@ export function EnquiryForm({
   const nameRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
+  const keyRef = useRef<HTMLInputElement | null>(null);
+
+  /* One key per form, minted here rather than on the server: a server-rendered
+     value would differ from the client's and mismatch on hydration, so the
+     server sends the input empty and the browser fills it once mounted. A DOM
+     write, not state — nothing re-renders for it. The key OUTLIVES a failed
+     attempt on purpose: the second press is then the same enquiry to the CRM
+     (gnk-crm 0096) and not a second lead. */
+  useEffect(() => {
+    const input = keyRef.current;
+    if (input && !input.value) input.value = crypto.randomUUID();
+  }, []);
 
   /* Submitting blurs the button the browser was focused on, and the form it
      belonged to is then replaced outright — so without this a screen-reader
@@ -157,7 +172,9 @@ export function EnquiryForm({
       const res = await fetch("/api/enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(15000),
+        // The route gives the CRM 8 s and tries once more on a lost answer,
+        // so the browser's own wait has to outlast both attempts (lib/crm.ts).
+        signal: AbortSignal.timeout(20000),
         body: JSON.stringify({
           name: form.get("name"),
           email: form.get("email"),
@@ -166,6 +183,12 @@ export function EnquiryForm({
           property_reference: reference,
           consent: form.get("consent") === "on",
           website: form.get("website"),
+          enquiry_key: form.get("enquiry_key"),
+          // where this came from (gnk-crm 0098): the page, an external
+          // referrer's host, and the campaign the visit landed with
+          source_page: window.location.pathname,
+          referrer_host: referrerHost(document.referrer, window.location.host),
+          ...readCampaign(safeSessionStorage()),
           ...Object.fromEntries(
             [...SELLER_KEYS, ...BUYER_KEYS].map((k) => [k, form.get(k) ?? ""]),
           ),
@@ -228,6 +251,8 @@ export function EnquiryForm({
       className="border border-line bg-surface p-6"
     >
       {reference ? <input type="hidden" name="property_reference" value={reference} /> : null}
+      {/* filled by the browser after mount — see keyRef; empty on the no-JavaScript path */}
+      <input type="hidden" name="enquiry_key" ref={keyRef} defaultValue="" />
       <h2 className="font-display text-xl text-ink">{heading}</h2>
       {intro ? <p className="mt-2 text-sm text-ink-2">{intro}</p> : null}
       {reference ? (

@@ -12,6 +12,11 @@ import {
   PROPERTY_TYPES,
   SELLER_KEYS,
   BUYER_KEYS,
+  CONSENT_VERSION,
+  campaignFromSearch,
+  readCampaign,
+  referrerHost,
+  rememberCampaign,
 } from "./enquiry-fields";
 
 /**
@@ -207,5 +212,84 @@ describe("the buyer picker never lacks an area the CRM is publishing with", () =
 
   it("is exactly AREAS when the feed is down", () => {
     expect(areasWithFeed([])).toEqual(AREAS);
+  });
+});
+
+/**
+ * Where the visitor came from (gnk-crm 0098, audit LR-02). The CRM's lead
+ * carried no source page and no campaign — an Instagram ad, a Google search
+ * and a portal click were one `website`. The site now remembers the campaign
+ * parameters a visit LANDED with, for the session, and the enquiry names the
+ * page it was sent from and the site that referred it. Three keys, capped,
+ * nothing personal, and every storage access survives a browser that refuses
+ * storage.
+ */
+describe("where the visitor came from", () => {
+  const fakeStorage = () => {
+    const m = new Map<string, string>();
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        m.set(k, v);
+      },
+    };
+  };
+
+  it("reads only the three campaign keys from a landing URL, trimmed and capped", () => {
+    expect(
+      campaignFromSearch("?utm_source=instagram&utm_medium=paid&utm_campaign=spring&fbclid=abc&name=x"),
+    ).toEqual({ utm_source: "instagram", utm_medium: "paid", utm_campaign: "spring" });
+    expect(campaignFromSearch("?utm_source=" + "x".repeat(121))).toEqual({});
+    expect(campaignFromSearch("?utm_source=%20%20")).toEqual({});
+    expect(campaignFromSearch("")).toEqual({});
+  });
+
+  it("remembers a campaign for the session, and a later plain page does not forget it", () => {
+    const s = fakeStorage();
+    rememberCampaign("?utm_source=instagram&utm_campaign=spring", s);
+    rememberCampaign("", s);
+    rememberCampaign("?q=villa", s);
+    expect(readCampaign(s)).toEqual({ utm_source: "instagram", utm_campaign: "spring" });
+  });
+
+  it("replaces the remembered campaign when a newer one arrives", () => {
+    const s = fakeStorage();
+    rememberCampaign("?utm_source=instagram", s);
+    rememberCampaign("?utm_source=google&utm_medium=cpc", s);
+    expect(readCampaign(s)).toEqual({ utm_source: "google", utm_medium: "cpc" });
+  });
+
+  it("reads nothing from a missing, throwing or corrupt storage, and never throws on write", () => {
+    expect(readCampaign(null)).toEqual({});
+    expect(
+      readCampaign({
+        getItem: () => {
+          throw new Error("private mode");
+        },
+      }),
+    ).toEqual({});
+    expect(readCampaign({ getItem: () => "{not json" })).toEqual({});
+    expect(readCampaign({ getItem: () => JSON.stringify({ utm_source: "x", name: "smuggled" }) })).toEqual({
+      utm_source: "x",
+    });
+    expect(() =>
+      rememberCampaign("?utm_source=x", {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error("quota");
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("names only an EXTERNAL referrer's host — the site's own pages are not a source", () => {
+    expect(referrerHost("https://l.instagram.com/?u=abc", "gnk-web.vercel.app")).toBe("l.instagram.com");
+    expect(referrerHost("https://gnk-web.vercel.app/properties", "gnk-web.vercel.app")).toBe("");
+    expect(referrerHost("", "gnk-web.vercel.app")).toBe("");
+    expect(referrerHost("not a url", "gnk-web.vercel.app")).toBe("");
+  });
+
+  it("carries a consent version the desk can cite", () => {
+    expect(CONSENT_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

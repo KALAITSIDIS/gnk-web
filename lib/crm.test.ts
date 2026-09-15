@@ -352,3 +352,72 @@ describe("handing an enquiry to the CRM", () => {
     expect((await submitEnquiry({ name: "A Buyer" })).ok).toBe(false);
   });
 });
+
+/**
+ * The CRM's door is idempotent by key since its migration 0096 (integrations
+ * audit 2026-09-15, INT-02): a repeated post with the same key answers with
+ * the first lead and writes nothing. That is what makes a retry SAFE — and a
+ * retry is the only right answer to a timeout, because the row may well have
+ * committed after we stopped waiting. Without a key there is nothing to make
+ * the second post the same enquiry, so there is no retry.
+ */
+describe("an enquiry carries its key, and a timed-out post is tried once more with it", () => {
+  const timeout = () => {
+    const e = new Error("The operation was aborted due to timeout");
+    e.name = "TimeoutError";
+    return e;
+  };
+
+  it("sends the idempotency key in the body", async () => {
+    const f = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    await submitEnquiry({ name: "A Buyer", idempotency_key: "3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50" });
+    const body = JSON.parse(String((f.mock.calls[0]![1] as RequestInit).body));
+    expect(body.idempotency_key).toBe("3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50");
+  });
+
+  it("retries a timeout exactly once, with the SAME body, and takes the second answer", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(timeout())
+      .mockResolvedValueOnce(new Response("", { status: 202 }));
+    const r = await submitEnquiry({ name: "A Buyer", idempotency_key: "3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50" });
+    expect(r.ok).toBe(true);
+    expect(f).toHaveBeenCalledTimes(2);
+    expect((f.mock.calls[0]![1] as RequestInit).body).toBe((f.mock.calls[1]![1] as RequestInit).body);
+  });
+
+  it("gives up after the second timeout rather than looping", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = vi.spyOn(globalThis, "fetch").mockRejectedValue(timeout());
+    expect((await submitEnquiry({ name: "A Buyer", idempotency_key: "3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50" })).ok).toBe(false);
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry without a key — a second post could be a second lead", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = vi.spyOn(globalThis, "fetch").mockRejectedValue(timeout());
+    expect((await submitEnquiry({ name: "A Buyer" })).ok).toBe(false);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry an answer — a 503 was heard, not lost", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const f = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 503 }));
+    expect((await submitEnquiry({ name: "A Buyer", idempotency_key: "3f2a9c1e-0b7d-4c6e-8a9f-0b1c2d3e4f50" })).ok).toBe(false);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the brief and its provenance ride in the body as meta (gnk-crm 0098)", () => {
+  it("sends `meta` beside the fields, as one object the CRM's door reads key by key", async () => {
+    const f = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    await submitEnquiry({
+      name: "A Buyer",
+      meta: { budget: "over_1m", source_page: "/properties/PAF0001", utm_source: "instagram" },
+    });
+    const body = JSON.parse(String((f.mock.calls[0]![1] as RequestInit).body));
+    expect(body.meta).toEqual({ budget: "over_1m", source_page: "/properties/PAF0001", utm_source: "instagram" });
+    expect(body.name).toBe("A Buyer");
+  });
+});

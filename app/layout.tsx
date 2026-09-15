@@ -4,6 +4,7 @@ import Link from "next/link";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { CampaignMemory } from "@/components/campaign-memory";
 import { SITE_URL } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
@@ -90,6 +91,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         <SiteHeader />
+        {/* remembers a landing campaign for the session (gnk-crm 0098); draws nothing */}
+        <CampaignMemory />
         {/* tabIndex -1: the skip link's target has to be able to take focus,
             or a keyboard user is scrolled to the content and left with the
             body focused (second pass, 2026-09-13). No ring on the region:

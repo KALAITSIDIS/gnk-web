@@ -271,6 +271,42 @@ export interface EnquiryInput {
   property_reference?: string;
   /** Honeypot. A person never fills this; a bot fills every field it finds. */
   website?: string;
+  /**
+   * Minted by the form per attempt (gnk-crm migration 0096). The CRM answers a
+   * repeated post with the same key with the FIRST lead and writes nothing,
+   * which is what makes the one retry in submitEnquiry safe. Absent from the
+   * no-JavaScript path, which therefore never retries.
+   */
+  idempotency_key?: string;
+  /**
+   * The brief and its provenance as data (gnk-crm 0098): the form's select
+   * values, the page, the landing campaign, the referrer host, the consent
+   * version. The CRM admits each key from its own allowlist and caps it;
+   * nothing personal is ever put here — it lands in a column erasure does not
+   * rewrite.
+   */
+  meta?: Record<string, string>;
+}
+
+/**
+ * The CRM's door: one or two counter round trips, an insert, an answer. Its
+ * own number rather than the feed's, because it is tried TWICE on a timeout
+ * and the browser's own wait (components/enquiry-form.tsx) has to outlast
+ * both attempts.
+ */
+export const ENQUIRY_TIMEOUT_MS = 8000;
+
+/**
+ * A failure that may already have succeeded. The CRM commits in under a
+ * second and answers after; when the ANSWER is what was lost — a timeout, an
+ * abort, a connection that fell over — the lead may well exist. A status code
+ * is an answer and is never in this set.
+ */
+function answerWasLost(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "TimeoutError" || err.name === "AbortError" || err.name === "TypeError")
+  );
 }
 
 export type EnquiryResult =
@@ -310,18 +346,32 @@ export async function submitEnquiry(
    */
   clientIp?: string,
 ): Promise<EnquiryResult> {
-  try {
-    const res = await fetch(`${CRM}/api/public/enquiries`, {
+  const body = JSON.stringify({ org: ORG, ...input });
+  const attempt = () =>
+    fetch(`${CRM}/api/public/enquiries`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(clientIp ? { "x-gnk-visitor-ip": clientIp } : {}),
         ...forwardHeaders(),
       },
-      body: JSON.stringify({ org: ORG, ...input }),
+      body,
       cache: "no-store",
-      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+      signal: AbortSignal.timeout(ENQUIRY_TIMEOUT_MS),
     });
+  try {
+    let res: Response;
+    try {
+      res = await attempt();
+    } catch (err) {
+      /* A lost answer is the one failure worth a second try, and ONLY with a
+         key: the CRM then treats the second post as the same enquiry (0096)
+         rather than a second lead. Once — a door that is down stays down, and
+         the visitor is better told to call than kept waiting. */
+      if (!input.idempotency_key || !answerWasLost(err)) throw err;
+      console.error("[crm] enquiry answer lost; posting once more with the same key:", err);
+      res = await attempt();
+    }
     if (res.status === 202) return { ok: true };
     if (res.status === 429) {
       return {

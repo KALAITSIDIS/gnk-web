@@ -93,6 +93,14 @@ export default function LegalPage() {
           third-party trackers, which is why you have not been asked to accept anything. Your
           visit is not profiled.
         </p>
+        {/* Bound to components/campaign-memory.tsx by app/legal/page.test.ts: the
+            sentence exists because the code does, and goes when it goes. */}
+        <p className="mt-3 text-ink-2">
+          If you arrive from a link that names a campaign, the site keeps that name in your
+          browser&rsquo;s session storage until you close the tab, so that an enquiry you send can
+          say where you came from. That is not a cookie, it identifies nobody, and nothing else
+          reads it.
+        </p>
       </section>
 
       <section className="mt-10">
@@ -101,9 +109,10 @@ export default function LegalPage() {
           Into our own client system, hosted in the European Union, where it is visible only
           to the two of us. We are also sent an email the moment it arrives, so that one of
           us replies quickly rather than whenever we next look; that notification contains
-          what you wrote and is delivered by Resend, our email provider. Property
-          photographs and listing information on this site are served from the same client
-          system.
+          what you wrote and is delivered by Resend, our email provider. If you give an email
+          address, you also receive one message confirming that your enquiry arrived, sent
+          through the same provider. Property photographs and listing information on this site
+          are served from the same client system.
         </p>
       </section>
 
