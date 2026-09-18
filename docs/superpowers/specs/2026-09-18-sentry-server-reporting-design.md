@@ -11,6 +11,11 @@ A Sentry review on 2026-09-18 found the org holds exactly one project,
 from real visitors — reports nothing. A 500 on the listing page, a CRM feed
 outage, a refused enquiry: all invisible.
 
+> Later the same day the CRM's project was renamed from `javascript-nextjs` to
+> `gnk-crm`. Both mentions of the old slug in this document are left as they
+> were written — this is a record of what was found, not a live reference — but
+> anyone looking for that project today wants `gnk-crm`.
+
 The CRM caught its own 400-after-a-saved-lead regression (2026-09-15) only
 because something was watching. The public site has no such thing.
 
