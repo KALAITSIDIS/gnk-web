@@ -76,6 +76,12 @@ European Union"). Not shared with the CRM's `javascript-nextjs`:
 
 One alert rule: first-seen issue, plus regression, to the account email.
 
+Creating the project also creates Sentry's own default rule, "Send a
+notification for high priority issues", which filters through Sentry's priority
+heuristic and is not the same thing. The MCP tooling can read alert rules but
+not write them, so switching that rule to "a new issue is created" is an
+operator action in the Sentry UI, recorded here so it is not quietly forgotten.
+
 ### Files
 
 New:
@@ -146,6 +152,14 @@ without telling them the value.
 
 One new environment variable, `SENTRY_DSN`, server-side, set in Vercel. A DSN is
 a write-only ingest address: it accepts events and reads nothing.
+
+**Production target only** — decided when setting it, against this document's
+first draft of "Production and Preview". The alert rule notifies on every new
+issue, so a preview deploy being poked at by hand would email the operator about
+its own experiments; that is the noise this project was split from the CRM's to
+avoid. It also matches how `CRM_FORWARD_KEY` and `SITE_REVALIDATE_KEY` are
+already scoped here. On a preview, `report()` is a console wrapper, exactly as
+in dev and CI.
 
 **No `SENTRY_AUTH_TOKEN`, no `withSentryConfig`, no source-map upload.** The CI
 build step keeps running with no credential and its comment stays true. The cost
