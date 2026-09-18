@@ -58,14 +58,16 @@ fails on any other.
 
 ## Configuration
 
-Five environment variables, all optional, each read in exactly one file
-beside its production default:
+Six environment variables, all optional, each read in exactly one file beside
+its production default — `SENTRY_DSN` alone has none, because unset is what
+"off" means for it:
 
 | | read at | default |
 |---|---|---|
 | `CRM_API_URL` | `lib/crm.ts` | `https://gnk-crm.vercel.app` |
 | `CRM_FORWARD_KEY` | `lib/crm.ts` | `` |
 | `CRM_ORG_SLUG` | `lib/crm.ts` | `gnk` |
+| `SENTRY_DSN` | `lib/report.ts` | `(none)` |
 | `SITE_REVALIDATE_KEY` | `lib/revalidate.ts` | `` |
 | `SITE_URL` | `lib/site-url.ts` | `https://gnk-web.vercel.app` |
 
@@ -78,6 +80,15 @@ value as the CRM's `ENQUIRY_FORWARD_KEY`.
 `SITE_REVALIDATE_KEY` unset is not broken either: every knock is refused
 (and the site says so once in its logs), and pages refresh on their timers
 alone. Set it to the same value as the CRM's `SITE_REVALIDATE_KEY`.
+
+`SENTRY_DSN` turns error reporting on, and it is not a third secret: a DSN is
+an ingest address, not a credential. It accepts error events and reads nothing
+— someone who had it could send this project noise, and nothing else. Unset,
+`report()` writes its console line and stops, which is every `npm run dev` and
+every CI run. Vercel binds environment at BUILD time, so setting it takes a
+redeploy before anything changes. Server only: there is no browser SDK and no
+`NEXT_PUBLIC_` twin, because `/legal` promises the visitor no third-party
+trackers and `lib/sentry-not-in-client.test.ts` holds the code to it.
 
 `SITE_URL` is the domain cut-over. The day www.kalaitsidis.com points here,
 set it to `https://www.kalaitsidis.com` and every canonical, og:url, sitemap
