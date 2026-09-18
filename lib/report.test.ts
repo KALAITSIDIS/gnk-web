@@ -9,26 +9,40 @@ vi.mock("@sentry/nextjs", () => ({
 
 const { report } = await import("@/lib/report");
 
-/** report() sends on a microtask; nothing here should race it. */
+/**
+ * report() sends on a microtask, so an assertion made straight after the call
+ * is a race. The first send in this file also pays for resolving the mocked
+ * module — 377 ms on a cold CI runner — which is why the window is generous.
+ */
 const sent = () =>
-  vi.waitFor(() =>
-    expect(captureMessage.mock.calls.length + captureException.mock.calls.length).toBeGreaterThan(0),
+  vi.waitFor(
+    () =>
+      expect(captureMessage.mock.calls.length + captureException.mock.calls.length).toBeGreaterThan(
+        0,
+      ),
+    { timeout: 5000 },
   );
 
 describe("report", () => {
-  beforeEach(() => {
-    captureMessage.mockClear();
-    captureException.mockClear();
-    // Reporting is gated on a DSN, so give it one. Without this the Sentry
-    // assertions below would pass by never reaching Sentry at all.
-    process.env.SENTRY_DSN = "https://examplePublicKey@o0.ingest.sentry.io/0";
-  });
   afterEach(() => {
     delete process.env.SENTRY_DSN;
     vi.restoreAllMocks();
   });
 
   describe("the console line it replaced", () => {
+    /* NO DSN in this block, and that is the point twice over. The console line
+       does not depend on one, and with a DSN these calls would each queue a
+       send whose microtask lands during a LATER test — which is exactly how
+       this file first went red on CI while passing here: a leftover
+       `crm.feed.unreachable` arrived after the next test had cleared the spy
+       and was read as its first call. A test that only fails when the runner
+       is slow is not coverage. */
+    beforeEach(() => {
+      delete process.env.SENTRY_DSN;
+      captureMessage.mockClear();
+      captureException.mockClear();
+    });
+
     it("goes to console.error, argument for argument", () => {
       const error = vi.spyOn(console, "error").mockImplementation(() => {});
       const err = new Error("fetch failed");
@@ -67,6 +81,15 @@ describe("report", () => {
   });
 
   describe("what reaches Sentry", () => {
+    beforeEach(() => {
+      captureMessage.mockClear();
+      captureException.mockClear();
+      // Reporting is gated on a DSN, so give it one. Without this every
+      // assertion below would pass by never reaching Sentry at all. Each test
+      // here awaits its own send before finishing, so none leaks into the next.
+      process.env.SENTRY_DSN = "https://examplePublicKey@o0.ingest.sentry.io/0";
+    });
+
     it("sends the event name as the title, fingerprinted so one failure is one issue", async () => {
       vi.spyOn(console, "error").mockImplementation(() => {});
       report({
@@ -95,7 +118,7 @@ describe("report", () => {
           extra: { status: 503, offset },
         });
       }
-      await vi.waitFor(() => expect(captureMessage).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => expect(captureMessage).toHaveBeenCalledTimes(2), { timeout: 5000 });
       const fingerprints = captureMessage.mock.calls.map(
         (c) => (c[1] as { fingerprint: string[] }).fingerprint,
       );
