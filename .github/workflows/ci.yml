@@ -4,8 +4,26 @@ on:
   push:
   pull_request:
 
+# ONE RUN PER COMMIT. `push:` is unfiltered on purpose: a branch push is this
+# repo's free CI rehearsal, and `main` runs after every merge. `pull_request:`
+# stays for the one case a push here cannot cover — a PR from a FORK, whose
+# push runs in the fork's Actions, not ours. A PR whose head branch lives in
+# THIS repository already ran on its push, so the job below skips the
+# pull_request run with that `if:`.
+#
+# Measured 2026-09-18: every PR commit here ran the workflow twice (6d8ad90,
+# 1022720, 69f7bed, bb4ed25, d8efe3c each carry a push run AND a pull_request
+# run on the same SHA). A concurrency group is not a fix: it cancels or
+# queues, never dedupes, and does nothing when the PR is opened after the push
+# run has already finished — the normal order here.
+#
+# This mirrors gnk-crm's workflow, where the same shape was adopted on
+# 2026-09-14 (its DECISIONS.md, T-ci-one-run-per-commit). Keep the two the
+# same; if a second job is ever added here, it needs the identical `if:`.
+
 jobs:
   checks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
