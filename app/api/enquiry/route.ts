@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { submitEnquiry } from "@/lib/crm";
+import { report } from "@/lib/report";
 import { site } from "@/lib/site";
 import {
   assembleMessage,
@@ -246,7 +247,15 @@ export async function POST(request: Request) {
     }
     // A refused enquiry is a lost client. It must never fail silently: without
     // this line the firm has no way of learning an enquiry was turned away.
-    console.error("[enquiry] refused:", result.error);
+    /* The sentence above is why this is the one report that matters most, and
+       why it carries only `result.error` — the CRM's own words about the
+       refusal. The visitor's name, address and message stay out of it. */
+    report({
+      event: "enquiry.refused",
+      level: "error",
+      log: ["[enquiry] refused:", result.error],
+      extra: { crmError: result.error, hadReference: Boolean(d.property_reference) },
+    });
     return fail(result.error, 502);
   }
 

@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { report } from "@/lib/report";
 
 /**
  * Who may ask this site to rebuild a page, and which pages.
@@ -34,9 +35,13 @@ export function isTrustedRevalidator(
   if (!expected) {
     if (!warnedUnset) {
       warnedUnset = true;
-      console.error(
-        "[revalidate] SITE_REVALIDATE_KEY is not set; every knock is refused and pages refresh on their timers alone",
-      );
+      report({
+        event: "revalidate.key-unset",
+        level: "error",
+        log: [
+          "[revalidate] SITE_REVALIDATE_KEY is not set; every knock is refused and pages refresh on their timers alone",
+        ],
+      });
     }
     return false;
   }

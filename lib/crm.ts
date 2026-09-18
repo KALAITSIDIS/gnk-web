@@ -16,6 +16,7 @@
  * (the enquiry door) and 0085 (adviser_view; the current body of
  * public_listings) in KALAITSIDIS/gnk-crm.
  */
+import { report } from "@/lib/report";
 
 export const CRM = process.env.CRM_API_URL ?? "https://gnk-crm.vercel.app";
 const ORG = process.env.CRM_ORG_SLUG ?? "gnk";
@@ -160,7 +161,11 @@ export async function getListings(): Promise<FeedResult> {
   if (!first.result.ok || !first.moved) return first.result;
   const again = await readAllPages();
   if (again.result.ok && again.moved) {
-    console.warn("[crm] feed changed between pages twice; serving the union");
+    report({
+      event: "crm.feed.unstable",
+      level: "warning",
+      log: ["[crm] feed changed between pages twice; serving the union"],
+    });
   }
   return again.result;
 }
@@ -188,12 +193,22 @@ async function readAllPages(): Promise<PagedRead> {
         },
       );
       if (!res.ok) {
-        console.error(`[crm] feed responded ${res.status} at offset ${offset}`);
+        report({
+          event: "crm.feed.bad-status",
+          level: "error",
+          log: [`[crm] feed responded ${res.status} at offset ${offset}`],
+          extra: { status: res.status, offset },
+        });
         return { result: { ok: false }, moved };
       }
       const body = (await res.json()) as FeedResponse;
       if (!Array.isArray(body.listings)) {
-        console.error("[crm] feed body had no listings array");
+        report({
+          event: "crm.feed.bad-shape",
+          level: "error",
+          log: ["[crm] feed body had no listings array"],
+          extra: { offset },
+        });
         return { result: { ok: false }, moved };
       }
       const prefix = (res.headers.get("etag") ?? "").split("-")[0];
@@ -213,10 +228,20 @@ async function readAllPages(): Promise<PagedRead> {
       }
       offset += body.listings.length;
     }
-    console.error(`[crm] feed still returning full pages after ${MAX_PAGES}; refusing a partial book`);
+    report({
+      event: "crm.feed.too-many-pages",
+      level: "error",
+      log: [`[crm] feed still returning full pages after ${MAX_PAGES}; refusing a partial book`],
+      extra: { maxPages: MAX_PAGES, offset },
+    });
     return { result: { ok: false }, moved };
   } catch (err) {
-    console.error("[crm] feed unreachable:", err);
+    report({
+      event: "crm.feed.unreachable",
+      level: "error",
+      log: ["[crm] feed unreachable:", err],
+      cause: err,
+    });
     return { result: { ok: false }, moved };
   }
 }
@@ -248,17 +273,33 @@ export async function getListing(reference: string): Promise<ListingResult> {
       },
     );
     if (!res.ok) {
-      console.error(`[crm] listing lookup responded ${res.status} for ${reference}`);
+      report({
+        event: "crm.listing.bad-status",
+        level: "error",
+        log: [`[crm] listing lookup responded ${res.status} for ${reference}`],
+        extra: { status: res.status, reference },
+      });
       return { ok: false };
     }
     const body = (await res.json()) as FeedResponse;
     if (!Array.isArray(body.listings)) {
-      console.error("[crm] listing lookup body had no listings array");
+      report({
+        event: "crm.listing.bad-shape",
+        level: "error",
+        log: ["[crm] listing lookup body had no listings array"],
+        extra: { reference },
+      });
       return { ok: false };
     }
     return { ok: true, listing: body.listings.find((l) => l.reference.toLowerCase() === wanted) ?? null };
   } catch (err) {
-    console.error("[crm] listing lookup failed:", err);
+    report({
+      event: "crm.listing.failed",
+      level: "error",
+      log: ["[crm] listing lookup failed:", err],
+      cause: err,
+      extra: { reference },
+    });
     return { ok: false };
   }
 }
@@ -369,7 +410,12 @@ export async function submitEnquiry(
          rather than a second lead. Once — a door that is down stays down, and
          the visitor is better told to call than kept waiting. */
       if (!input.idempotency_key || !answerWasLost(err)) throw err;
-      console.error("[crm] enquiry answer lost; posting once more with the same key:", err);
+      report({
+        event: "crm.enquiry.retried",
+        level: "error",
+        log: ["[crm] enquiry answer lost; posting once more with the same key:", err],
+        cause: err,
+      });
       res = await attempt();
     }
     if (res.status === 202) return { ok: true };
@@ -386,13 +432,26 @@ export async function submitEnquiry(
        400 from its validator reads "Too big: expected string to have <=5000
        characters", which tells a seller nothing they can act on and looks
        broken. Logged in full, shown as a sentence. */
-    console.error("[crm] enquiry refused:", res.status, body.error);
+    /* `body` here is the CRM's RESPONSE, not the enquiry — the request payload
+       of the same name is shadowed above. Nothing the visitor typed goes to
+       Sentry. */
+    report({
+      event: "crm.enquiry.refused",
+      level: "error",
+      log: ["[crm] enquiry refused:", res.status, body.error],
+      extra: { status: res.status, crmError: body.error },
+    });
     return {
       ok: false,
       error: "That enquiry could not be sent. Please call or WhatsApp us instead.",
     };
   } catch (err) {
-    console.error("[crm] enquiry failed:", err);
+    report({
+      event: "crm.enquiry.failed",
+      level: "error",
+      log: ["[crm] enquiry failed:", err],
+      cause: err,
+    });
     return { ok: false, error: "That enquiry could not be sent. Please call or WhatsApp us." };
   }
 }
