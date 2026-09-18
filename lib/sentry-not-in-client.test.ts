@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
  * It holds today only by luck: components/property-search.tsx and
  * property-card.tsx do import from @/lib/crm, which now imports the reporter —
  * but they import `Listing` as a TYPE, which the compiler erases before any
- * bundler sees it. vitest.config.ts's comment records the last time that
+ * bundler sees it. vitest.config.mts's comment records the last time that
  * distinction caught somebody out. Luck is not a guarantee, so this walks the
  * value-import graph from every "use client" file and makes it a rule.
  */
