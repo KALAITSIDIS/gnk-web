@@ -121,22 +121,41 @@ describe("report", () => {
       async () => {
         // The whole reason `event` is never interpolated into: the offset lives
         // in `extra`, so a feed failing at 0 and at 60 is one issue, not two.
+        //
+        // Reported one at a time, each awaited. An earlier version fired both
+        // in the same tick and waited for two calls, which CI could not deliver
+        // — an artefact of how vitest resolves a mocked module under a cold
+        // dynamic import, not of report(), which holds no state across calls
+        // and on a server sends through a module instrumentation.ts already
+        // has resident. The property under test is that the fingerprint does
+        // not move when `extra` does, and sequential calls show that exactly.
         vi.spyOn(console, "error").mockImplementation(() => {});
+        const fingerprints: string[][] = [];
+        const extras: unknown[] = [];
         for (const offset of [0, 60]) {
+          captureMessage.mockClear();
           report({
             event: "crm.feed.bad-status",
             level: "error",
             log: [`[crm] feed responded 503 at offset ${offset}`],
             extra: { status: 503, offset },
           });
+          await sent();
+          const context = captureMessage.mock.calls[0][1] as {
+            fingerprint: string[];
+            extra: unknown;
+          };
+          fingerprints.push(context.fingerprint);
+          extras.push(context.extra);
         }
-        await vi.waitFor(() => expect(captureMessage).toHaveBeenCalledTimes(2), {
-          timeout: SEND_WINDOW_MS,
-        });
-        const fingerprints = captureMessage.mock.calls.map(
-          (c) => (c[1] as { fingerprint: string[] }).fingerprint,
-        );
-        expect(fingerprints).toEqual([["crm.feed.bad-status"], ["crm.feed.bad-status"]]);
+        expect(fingerprints, "one issue, not two").toEqual([
+          ["crm.feed.bad-status"],
+          ["crm.feed.bad-status"],
+        ]);
+        expect(extras, "and the offset still travelled, where it is searchable").toEqual([
+          { status: 503, offset: 0 },
+          { status: 503, offset: 60 },
+        ]);
       },
       TEST_BUDGET_MS,
     );
