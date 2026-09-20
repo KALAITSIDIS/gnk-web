@@ -16,6 +16,13 @@
  * (the enquiry door) and 0085 (adviser_view; the current body of
  * public_listings) in KALAITSIDIS/gnk-crm.
  */
+import {
+  feedEnvelopeSchema,
+  feedIssueSummary,
+  type FeedImage,
+  type FeedMultilang,
+  type FeedRow,
+} from "@/lib/feed-schema";
 import { report } from "@/lib/report";
 
 export const CRM = process.env.CRM_API_URL ?? "https://gnk-crm.vercel.app";
@@ -39,8 +46,18 @@ const forwardHeaders = (): Record<string, string> => {
 /** Seconds before a page rebuilds from the feed. The CRM sends max-age=60. */
 export const FEED_REVALIDATE = 60;
 
-/** A language-keyed string. Phase 1 renders English; el/ru arrive with the site's own translation. */
-export type Multilang = { en?: string | null; el?: string | null; ru?: string | null } | null;
+/**
+ * THE TYPES ARE THE SCHEMA'S. `Multilang`, `ListingImage` and `Listing` are
+ * z.infer of lib/feed-schema.ts — the same schema readAllPages and getListing
+ * parse every response with below — so a value of one of these types has been
+ * checked, field by field, against the contract, and a change to the contract
+ * is a change to the type. Until 2026-09-20 they were hand-written interfaces
+ * beside a cast, kept in step with the schema by a test that compared key
+ * names, and TypeScript's word for a row was a wish.
+ */
+
+/** A language-keyed field: `{en, el, ru}`, any subset, or null. Phase 1 renders English; el/ru arrive with the site's own translation. */
+export type Multilang = FeedMultilang;
 
 /**
  * One photograph as the feed sends it: exactly {thumb, card, full, alt,
@@ -50,73 +67,27 @@ export type Multilang = { en?: string | null; el?: string | null; ru?: string | 
  * created_at` (gnk-crm supabase/migrations/0085_adviser_view.sql) and carries
  * NO flag — gnk-crm RLS test 49 pins both halves (the cover leads even with a
  * later sort_order; exactly five keys), and it is the test that catches the
- * feed changing. This interface declared `is_cover` from the site's first
+ * feed changing. The old interface declared `is_cover` from the site's first
  * commit; the feed never sent it, and three lookups were right by accident.
  * CRM-side shape: lib/services/public-listings.ts FeedImage.
  */
-export interface ListingImage {
-  card: string | null;
-  thumb: string | null;
-  full?: string | null;
-  alt?: Multilang;
-  watermarked?: boolean;
-}
+export type ListingImage = FeedImage;
 
-/** One row of `public_listings()`. Every field is nullable — the feed is honest about gaps. */
-export interface Listing {
-  reference: string;
-  kind: string;
-  property_type: string;
-  transaction_type: string;
-  title: Multilang;
-  short_description: Multilang;
-  /* The firm's own judgement, written in the CRM's Marketing tab. Joined the
-     feed's allowlist in gnk-crm migration 0085. Optional because a feed
-     served before that migration simply will not carry it, and an absent
-     view is the same as an empty one. What the page shows in its place is
-     decided in app/properties/[reference]/page.tsx, not here: the summary —
-     unless the summary merely repeats the opening of the description, in
-     which case nothing. PAF0003 is that case, and four sentences across the
-     two repos said "falls back to the summary" as if it were not. */
-  adviser_view?: Multilang;
-  public_description: Multilang;
-  district: Multilang;
-  area: Multilang;
-  sea_distance_m: number | null;
-  currency: string | null;
-  asking_price: number | null;
-  rent_price_month: number | null;
-  vat_status: string | null;
-  covered_area_sqm: number | null;
-  plot_area_sqm: number | null;
-  veranda_sqm: number | null;
-  roof_garden_sqm: number | null;
-  basement_sqm: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  wc: number | null;
-  parking_spaces: number | null;
-  has_storage: boolean | null;
-  floor_number: number | null;
-  total_floors: number | null;
-  year_built: number | null;
-  energy_class: string | null;
-  features: string[] | null;
-  title_deed_status: string | null;
-  construction_status: string | null;
-  delivery_date: string | null;
-  published_at: string | null;
-  updated_at: string | null;
-  images: ListingImage[] | null;
-}
-
-interface FeedResponse {
-  org: string;
-  count: number;
-  limit: number;
-  offset: number;
-  listings: Listing[];
-}
+/**
+ * One row of `public_listings()`. Every field is nullable — the feed is honest
+ * about gaps. The column list and its order are feedRowSchema's, which follows
+ * gnk-crm 0085.
+ *
+ * `adviser_view` is the firm's own judgement, written in the CRM's Marketing
+ * tab; it joined the feed's allowlist in 0085 and is optional because a feed
+ * served before that migration simply will not carry it, and an absent view
+ * is the same as an empty one. What the page shows in its place is decided in
+ * app/properties/[reference]/page.tsx, not here: the summary — unless the
+ * summary merely repeats the opening of the description, in which case
+ * nothing. PAF0003 is that case, and four sentences across the two repos said
+ * "falls back to the summary" as if it were not.
+ */
+export type Listing = FeedRow;
 
 /**
  * Every published listing.
@@ -267,16 +238,29 @@ async function readAllPages(deadline: number): Promise<PagedRead> {
         });
         return { result: { ok: false }, moved };
       }
-      const body = (await res.json()) as FeedResponse;
-      if (!Array.isArray(body.listings)) {
+      /* THE BOUNDARY. The body is JSON off the wire and nothing more until the
+         contract has looked at it — every field the site reads, every field
+         the paging below reads, every row. What fails is refused whole, as
+         "unavailable": not as an empty book, not as a book minus the bad row,
+         and (in getListing) not as a 404. Until 2026-09-20 this was a cast
+         and a check that `listings` was an array, so a price arriving as a
+         string was multiplied, a title arriving as an object was rendered,
+         and a first page that forgot its `limit` was the whole book — with
+         listing 51 onward simply not on the site (lib/crm.validation.test.ts).
+         Parsed ONCE per response; nothing downstream parses again. */
+      const parsed = feedEnvelopeSchema.safeParse(await res.json());
+      if (!parsed.success) {
+        const issues = feedIssueSummary(parsed.error);
         report({
           event: "crm.feed.bad-shape",
           level: "error",
-          log: ["[crm] feed body had no listings array"],
-          extra: { offset },
+          // paths and codes only — never a value the payload carried
+          log: [`[crm] feed body at offset ${offset} failed the contract: ${issues}`],
+          extra: { offset, issues },
         });
         return { result: { ok: false }, moved };
       }
+      const body = parsed.data;
       const prefix = (res.headers.get("etag") ?? "").split("-")[0];
       if (prefix) {
         if (snapshot === null) snapshot = prefix;
@@ -286,26 +270,19 @@ async function readAllPages(deadline: number): Promise<PagedRead> {
         /* A REFERENCE IS THE ROW'S IDENTITY: it is the dedup key here, the URL
            of the page, and the entry in the sitemap. A row without one used to
            pass straight through — `seen.has(undefined)` is false the first time
-           — so the first such row became /properties/undefined in the sitemap
-           and every subsequent one was silently folded into it. Drop it and say
-           so: the rest of the book is still serveable, and a row nothing can
-           link to is not part of it. */
-        if (typeof l?.reference !== "string" || l.reference.trim() === "") {
-          report({
-            event: "crm.feed.row-without-reference",
-            level: "error",
-            log: ["[crm] feed row carried no reference; dropped"],
-            extra: { offset },
-          });
-          continue;
-        }
+           — so the first such row became /properties/undefined in the sitemap;
+           then it was dropped here with a report and the rest served. The
+           schema above now refuses the payload that carries it, like any other
+           malformed one: a book we know is wrong is worse than one we admit we
+           cannot read. */
         if (seen.has(l.reference)) continue; // a boundary duplicate from a moving book
         seen.add(l.reference);
         listings.push(l);
       }
-      // The CRM's cap, read back. A feed that does not say is a one-page feed.
-      const pageSize = typeof body.limit === "number" && body.limit > 0 ? body.limit : null;
-      if (pageSize === null || body.listings.length < pageSize) {
+      // The CRM's cap, read back — a positive integer, or the schema refused
+      // it above. A feed that does not say is not a one-page feed; it is a
+      // feed the site cannot page, and it is refused rather than cut short.
+      if (body.listings.length < body.limit) {
         return { result: { ok: true, listings }, moved };
       }
       offset += body.listings.length;
@@ -363,24 +340,28 @@ export async function getListing(reference: string): Promise<ListingResult> {
       });
       return { ok: false };
     }
-    const body = (await res.json()) as FeedResponse;
-    if (!Array.isArray(body.listings)) {
+    /* The same boundary as readAllPages, for the same reason: a row this page
+       is about to render has been checked against the contract, or the page
+       is told "could not look" — never "no such property". A malformed row
+       used to be found here and rendered; a row without a reference used to be
+       skipped by the find(), so a broken payload answered `listing: null` and
+       the page answered 404 for a mandate that was live. */
+    const parsed = feedEnvelopeSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      const issues = feedIssueSummary(parsed.error);
       report({
         event: "crm.listing.bad-shape",
         level: "error",
-        log: ["[crm] listing lookup body had no listings array"],
-        extra: { reference },
+        // paths and codes only — never a value the payload carried
+        log: [`[crm] listing lookup for ${reference} failed the contract: ${issues}`],
+        extra: { reference, issues },
       });
       return { ok: false };
     }
-    /* `l?.reference` is not defensive noise: the CRM answers this call with the
-       feed's first PAGE when it does not know `?reference=`, so whatever a row
-       without one would do in readAllPages it would do here too — and here it
-       would throw inside a find(), which the catch below would report as an
-       unreachable feed. A row with no reference simply is not the one asked for. */
-    const listing =
-      body.listings.find((l) => typeof l?.reference === "string" && l.reference.toLowerCase() === wanted) ??
-      null;
+    /* The find() is still the last word: the CRM answers this call with the
+       feed's first PAGE when it does not know `?reference=`, and the wrong
+       row must not be taken for the one asked for. */
+    const listing = parsed.data.listings.find((l) => l.reference.toLowerCase() === wanted) ?? null;
     return { ok: true, listing };
   } catch (err) {
     report({

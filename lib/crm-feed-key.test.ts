@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getListing, getListings } from "./crm";
+import { feedEnvelope, feedRow } from "./feed-fixtures";
 
 /**
  * The site proves it is itself on feed reads too, not only on enquiries.
@@ -22,7 +23,8 @@ beforeEach(() => {
   vi.spyOn(globalThis, "fetch").mockImplementation(((_: unknown, init?: RequestInit) => {
     captured.push((init?.headers ?? {}) as Record<string, string>);
     return Promise.resolve(
-      new Response(JSON.stringify({ listings: [{ reference: "PAF0001" }], limit: 50, offset: 0 }), {
+      // a whole row, so the reader accepts the answer rather than refusing it under the contract
+      new Response(JSON.stringify(feedEnvelope([feedRow()])), {
         status: 200,
         headers: { etag: 'W/"snap-d0"' },
       }),

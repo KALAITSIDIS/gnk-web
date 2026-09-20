@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getListing, getListings, submitEnquiry } from "./crm";
+import { feedEnvelope, feedRow } from "./feed-fixtures";
 
 /**
  * The client that decides whether a property exists.
@@ -16,7 +17,11 @@ import { getListing, getListings, submitEnquiry } from "./crm";
  * say "briefly unavailable" instead of "gone".
  */
 
-const listing = (reference: string) => ({ reference, kind: "standalone" });
+/* A complete row (lib/feed-fixtures.ts) under this reference. Since
+   2026-09-20 the reader parses every response against the contract, so a
+   fixture of `{ reference, kind }` is a feed the CRM never sent and the
+   reader rightly refuses; the rows here have to be rows. */
+const listing = (reference: string) => ({ ...feedRow({ reference }), reference });
 const ok = (body: unknown) =>
   Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
 
@@ -57,14 +62,14 @@ describe("a feed failure is never 'no such property'", () => {
     // the function.
     const f = vi
       .spyOn(globalThis, "fetch")
-      .mockImplementation(() => ok({ listings: [] }) as never);
+      .mockImplementation(() => ok(feedEnvelope([])) as never);
     await getListings();
     const init = f.mock.calls[0][1] as RequestInit;
     expect(init.signal, "every feed request carries an abort signal").toBeInstanceOf(AbortSignal);
   });
 
   it("distinguishes a genuinely empty book from a broken feed", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(() => ok({ listings: [] }) as never);
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => ok(feedEnvelope([])) as never);
     expect(await getListings()).toEqual({ ok: true, listings: [] });
     // answered, and genuinely has no such property — this one MAY 404
     expect(await getListing("PAF0001")).toEqual({ ok: true, listing: null });
@@ -95,7 +100,7 @@ const paged =
     const book = ref ? rows.filter((r) => r.reference.toLowerCase() === ref) : rows;
     const page = book.slice(offset, offset + size);
     return Promise.resolve(
-      new Response(JSON.stringify({ listings: page, limit: size, offset, count: page.length }), {
+      new Response(JSON.stringify({ org: "gnk", listings: page, limit: size, offset, count: page.length }), {
         status: 200,
         headers: { etag },
       }),
@@ -144,7 +149,7 @@ describe("the whole book, page by page", () => {
       // listing shifting the window would make it
       const page = offset === 0 ? rows.slice(0, 50) : [rows[49]!, ...rows.slice(50)];
       return Promise.resolve(
-        new Response(JSON.stringify({ listings: page, limit: 50, offset }), { status: 200 }),
+        new Response(JSON.stringify({ org: "gnk", listings: page, limit: 50, offset, count: page.length }), { status: 200 }),
       );
     }) as never);
     const r = await getListings();
@@ -154,7 +159,7 @@ describe("the whole book, page by page", () => {
   it("refuses a feed that never ends rather than hanging a render", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      (() => ok({ listings: book(50), limit: 50 })) as never,
+      (() => ok(feedEnvelope(book(50)))) as never,
     );
     expect(await getListings()).toEqual({ ok: false });
   });
@@ -172,7 +177,7 @@ describe("a book that moves between pages", () => {
       seen += 1;
       const page = rows.slice(offset, offset + size);
       return Promise.resolve(
-        new Response(JSON.stringify({ listings: page, limit: size, offset, count: page.length }), {
+        new Response(JSON.stringify({ org: "gnk", listings: page, limit: size, offset, count: page.length }), {
           status: 200,
           headers: { etag: feedEtag(snapshotFor(pass, offset), offset) },
         }),
@@ -261,7 +266,7 @@ describe("a book whose rows change under the read", () => {
       const offset = Number(u.searchParams.get("offset") ?? 0);
       const page = inventory.slice(offset, offset + size).map(listing);
       const res = new Response(
-        JSON.stringify({ listings: page, limit: size, offset, count: page.length }),
+        JSON.stringify({ org: "gnk", listings: page, limit: size, offset, count: page.length }),
         { status: 200, headers: { etag: `W/"inv${inventory.join("")}-d${offset}"` } },
       );
       call += 1;
@@ -356,36 +361,41 @@ describe("the whole call is bounded, pages and retries together", () => {
   });
 });
 
-describe("a row the site could not link to is not part of the book", () => {
-  it("drops a row with no reference, and keeps the rest", async () => {
-    // `seen.has(undefined)` is false the first time, so such a row used to be
-    // pushed whole: the sitemap then carried /properties/undefined and every
-    // later reference-less row was folded silently into that one entry.
+describe("a row the site could not link to is not part of any book", () => {
+  /* Three answers over time. `seen.has(undefined)` was false the first time,
+     so such a row used to be pushed whole and the sitemap carried
+     /properties/undefined. Then it was dropped here with a report and the
+     REST was served. Since 2026-09-20 the contract is applied at the boundary
+     (lib/crm.validation.test.ts) and a payload carrying such a row is refused
+     like any other malformed one: a book we know is wrong is worse than one
+     we admit we cannot read, and a listing page must never hear "no such
+     property" from a payload the site could not read. */
+  it("refuses the payload whole, and says so — never a book minus that row", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockImplementation(
       (() =>
-        ok({
-          listings: [listing("PAF0001"), { kind: "standalone" }, { reference: "  " }, listing("PAF0002")],
-        })) as never,
+        ok(
+          feedEnvelope([listing("PAF0001"), { kind: "standalone" }, { reference: "  " }, listing("PAF0002")]),
+        )) as never,
     );
-    const r = await getListings();
-    expect(r.ok && r.listings.map((l) => l.reference)).toEqual(["PAF0001", "PAF0002"]);
-    expect(err, "dropped, and said so").toHaveBeenCalled();
+    expect(await getListings()).toEqual({ ok: false });
+    expect(err, "refused, and said so").toHaveBeenCalled();
   });
 
-  it("does not throw looking for one listing among rows without references", async () => {
+  it("does not answer 'no such property' from a payload it could not read", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      (() => ok({ listings: [{ kind: "standalone" }, listing("PAF0001")] })) as never,
+      (() => ok(feedEnvelope([{ kind: "standalone" }, listing("PAF0001")]))) as never,
     );
-    expect(await getListing("PAF0001")).toEqual({ ok: true, listing: listing("PAF0001") });
-    expect(await getListing("PAF9999")).toEqual({ ok: true, listing: null });
+    expect(await getListing("PAF0001")).toEqual({ ok: false });
+    expect(await getListing("PAF9999")).toEqual({ ok: false });
   });
 });
 
 describe("finding one listing", () => {
   it("matches a reference whatever case it was typed in", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      () => ok({ listings: [listing("PAF0001")] }) as never,
+      () => ok(feedEnvelope([listing("PAF0001")])) as never,
     );
     for (const typed of ["PAF0001", "paf0001", "Paf0001"]) {
       const found = await getListing(typed);
@@ -396,7 +406,7 @@ describe("finding one listing", () => {
   it("asks the CRM for ONE reference rather than reading the whole book (gnk-crm 0088)", async () => {
     const f = vi
       .spyOn(globalThis, "fetch")
-      .mockImplementation(() => ok({ listings: [listing("PAF0001")] }) as never);
+      .mockImplementation(() => ok(feedEnvelope([listing("PAF0001")])) as never);
     await getListing("paf0001");
     expect(f).toHaveBeenCalledTimes(1);
     const url = new URL(String(f.mock.calls[0]![0]));
@@ -406,14 +416,14 @@ describe("finding one listing", () => {
 
   it("is still the last word: a CRM that ignores the parameter answers the feed, and the wrong row is not taken", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      () => ok({ listings: [listing("PAF0002"), listing("PAF0003")] }) as never,
+      () => ok(feedEnvelope([listing("PAF0002"), listing("PAF0003")])) as never,
     );
     expect(await getListing("PAF0001")).toEqual({ ok: true, listing: null });
   });
 
   it("returns ok with a null listing when the feed answered and has no match", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      () => ok({ listings: [listing("PAF0001")] }) as never,
+      () => ok(feedEnvelope([listing("PAF0001")])) as never,
     );
     expect(await getListing("PAF9999")).toEqual({ ok: true, listing: null });
   });
