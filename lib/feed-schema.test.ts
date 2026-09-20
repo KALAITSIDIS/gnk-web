@@ -1,15 +1,15 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Listing } from "@/lib/crm";
 import { cardSpecs, deliveryLabel, placeLine, priceLabel, pricePerSqm } from "@/lib/format";
+import { feedEnvelope, feedRow } from "@/lib/feed-fixtures";
 import {
   FEED_IMAGE_KEYS,
   FEED_KEYS,
   feedEnvelopeSchema,
+  feedIssueSummary,
   feedProblems,
   feedRowSchema,
+  type FeedRow,
 } from "@/lib/feed-schema";
 
 /**
@@ -24,84 +24,27 @@ import {
  * second one badly.
  */
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+/* The fixtures live in lib/feed-fixtures.ts, shared with the reader's own
+   tests (lib/crm.validation.test.ts, lib/crm.test.ts): one complete row and
+   one envelope, so that what this file says the schema accepts is exactly
+   what those files feed the reader. */
+const row = feedRow;
+const envelope = feedEnvelope;
 
-/** A complete, well-formed row — every one of the 36 keys, plausibly filled. */
-const row = (over: Record<string, unknown> = {}) => ({
-  reference: "PAF0001",
-  kind: "standalone",
-  property_type: "villa",
-  transaction_type: "sale",
-  title: { en: "Two-storey villa in Peyia", el: null, ru: null },
-  short_description: { en: "Three bedrooms across two floors." },
-  adviser_view: { en: "The plot is the value here." },
-  public_description: { en: "A detached villa on a 1,200 m² plot." },
-  district: { en: "Paphos", el: "Πάφος" },
-  area: { en: "Peyia" },
-  sea_distance_m: 1400,
-  currency: "EUR",
-  // numeric(14,2) — PostgREST sends a JSON number, measured on both stacks
-  asking_price: 450000,
-  rent_price_month: null,
-  vat_status: "resale_no_vat",
-  covered_area_sqm: 185,
-  plot_area_sqm: 1200,
-  veranda_sqm: 40,
-  roof_garden_sqm: null,
-  basement_sqm: null,
-  bedrooms: 3,
-  bathrooms: 3,
-  wc: 1,
-  parking_spaces: 2,
-  has_storage: true,
-  floor_number: null,
-  total_floors: 2,
-  year_built: 2007,
-  energy_class: "B",
-  features: ["sea_view", "private_pool"],
-  title_deed_status: "separate",
-  delivery_date: null,
-  construction_status: "completed",
-  published_at: "2026-09-01T09:12:44.191Z",
-  updated_at: "2026-09-06T18:03:11.004Z",
-  images: [
-    {
-      thumb: "https://x.supabase.co/storage/v1/object/public/media/a/thumb.jpg",
-      card: "https://x.supabase.co/storage/v1/object/public/media/a/card.jpg",
-      full: "https://x.supabase.co/storage/v1/object/public/media/a/full.jpg",
-      alt: { en: "The pool terrace" },
-      watermarked: true,
-    },
-  ],
-  ...over,
-});
-
-const envelope = (listings: unknown, over: Record<string, unknown> = {}) => ({
-  org: "gnk",
-  count: Array.isArray(listings) ? listings.length : 0,
-  limit: 50,
-  offset: 0,
-  listings,
-  ...over,
-});
-
-describe("the schema and the site's own interface describe the same row", () => {
-  /** The keys of `export interface Listing`, read from lib/crm.ts as written. */
-  const listingKeys = (): string[] => {
-    const src = readFileSync(join(root, "lib", "crm.ts"), "utf-8");
-    const m = /export interface Listing \{([\s\S]*?)\n\}/.exec(src);
-    expect(m, "lib/crm.ts declares interface Listing").not.toBeNull();
-    return [...m![1]!.matchAll(/^\s{2}([a-z_]+)\??:/gm)].map((x) => x[1]!);
-  };
-
+describe("the schema and the site's own type describe the same row", () => {
   it("has the 36 columns the CRM's allowlist pins", () => {
     expect(FEED_KEYS).toHaveLength(36);
   });
 
-  it("agrees with lib/crm.ts key for key, in both directions", () => {
-    // A key added to one and not the other is the drift this catches offline:
-    // the live check can only see it once the CRM has shipped it.
-    expect([...FEED_KEYS].sort()).toEqual([...listingKeys()].sort());
+  it("IS lib/crm.ts's Listing — one definition, so there is no second list to drift", () => {
+    // Until 2026-09-20 this test read `interface Listing` out of lib/crm.ts as
+    // text and compared key names. Listing is now z.infer of feedRowSchema;
+    // these two lines are the pin, and they are checked by `npm run typecheck`
+    // rather than at run time — a parsed row is a Listing and a Listing is a
+    // parsed row, or tsc refuses the file.
+    const parsedIsListing: Listing = feedRowSchema.parse(row());
+    const listingIsParsed: FeedRow = parsedIsListing;
+    expect(Object.keys(listingIsParsed).sort()).toEqual([...FEED_KEYS].sort());
   });
 
   it("describes the image object the site reads, and no more", () => {
@@ -208,7 +151,9 @@ describe("the shapes the book actually holds", () => {
 describe("what the site must refuse, and why", () => {
   const rejects: [string, unknown, RegExp][] = [
     ["a row with no reference — it is the URL and the sitemap entry", envelope([row({ reference: undefined })]), /reference/],
-    ["a reference that is blank", envelope([row({ reference: "" })]), /reference/],
+    ["a reference that is empty", envelope([row({ reference: "" })]), /reference/],
+    // the reader used to trim and drop such a row itself; the guard is the schema's now
+    ["a reference that is blank", envelope([row({ reference: "   " })]), /reference/],
     [
       "a price arriving as a string — the coercion nobody would notice",
       envelope([row({ asking_price: "450000.00" })]),
@@ -252,6 +197,29 @@ describe("what the site must refuse, and why", () => {
     // A book of fifty with one bad row is a needle; the path is the magnet.
     const problems = feedProblems(envelope([row(), row({ reference: "PAF0002", asking_price: "x" })]));
     expect(problems.join(" | ")).toMatch(/listings\.1\.asking_price/);
+  });
+
+  it("gives the reader a log line of paths and codes, capped, and never a value", () => {
+    // What lib/crm.ts writes when it refuses a payload. The payload here
+    // carries a marker in every field that a careless summary might quote.
+    const bad = envelope(
+      [row({ title: { en: { text: "MARKER-TITLE" } }, asking_price: "MARKER-PRICE", public_description: { en: "MARKER-BODY" } })],
+      { limit: "MARKER-LIMIT" },
+    );
+    const parsed = feedEnvelopeSchema.safeParse(bad);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    const line = feedIssueSummary(parsed.error);
+    expect(line).toMatch(/limit: invalid_type/);
+    expect(line).toMatch(/listings\.0\.title\.en: invalid_type/);
+    expect(line).toMatch(/listings\.0\.asking_price: invalid_type/);
+    expect(line).not.toMatch(/MARKER/);
+    // and a payload wrong in many places is summarised, not dumped
+    const many = envelope([row(Object.fromEntries(FEED_KEYS.map((k) => [k, {}])))]);
+    const manyParsed = feedEnvelopeSchema.safeParse(many);
+    if (manyParsed.success) return expect.fail("a row of empty objects must not parse");
+    expect(feedIssueSummary(manyParsed.error, 3).split(";")).toHaveLength(4);
+    expect(feedIssueSummary(manyParsed.error, 3)).toMatch(/\+\d+ more$/);
   });
 });
 

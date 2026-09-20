@@ -96,17 +96,35 @@ export function EnquiryForm({
   const nameRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
-  const keyRef = useRef<HTMLInputElement | null>(null);
+  /* The key itself, and the hidden input that carries it for a native post.
+     Two refs on purpose — the effect below says why. */
+  const enquiryKey = useRef("");
+  const keyInput = useRef<HTMLInputElement | null>(null);
 
   /* One key per form, minted here rather than on the server: a server-rendered
      value would differ from the client's and mismatch on hydration, so the
-     server sends the input empty and the browser fills it once mounted. A DOM
-     write, not state — nothing re-renders for it. The key OUTLIVES a failed
-     attempt on purpose: the second press is then the same enquiry to the CRM
-     (gnk-crm 0096) and not a second lead. */
+     server sends the input empty and the browser fills it once mounted. The
+     key OUTLIVES a failed attempt on purpose: the second press is then the
+     same enquiry to the CRM (gnk-crm 0096) and not a second lead.
+
+     HELD IN A REF, AND SENT FROM IT. Until 2026-09-20 the key lived only in
+     the hidden input (`defaultValue=""`, written once here) and the request
+     read it back through FormData. React re-syncs an uncontrolled input's
+     defaultValue on every commit, and for a type="hidden" input the value IS
+     the attribute — HTML's "default" value mode, with no dirty value to
+     protect — so the first re-render after mount, the one that says
+     "Sending…", wiped it. The first request carried the key and every press
+     after it carried "", which the route forwards as no key at all: a retry
+     after a lost answer was a second lead, the exact thing the key exists to
+     prevent (components/enquiry-form.client.test.ts). The request now takes
+     the key from `enquiryKey`, which no render touches. The input gets the
+     same value so a native post would carry it too, and it is given NO
+     defaultValue: React leaves the value of an input alone when it was handed
+     neither `value` nor `defaultValue` (react-dom updateInput). The guard
+     keeps one key under StrictMode's doubled effects. */
   useEffect(() => {
-    const input = keyRef.current;
-    if (input && !input.value) input.value = crypto.randomUUID();
+    if (!enquiryKey.current) enquiryKey.current = crypto.randomUUID();
+    if (keyInput.current) keyInput.current.value = enquiryKey.current;
   }, []);
 
   /* Submitting blurs the button the browser was focused on, and the form it
@@ -183,7 +201,8 @@ export function EnquiryForm({
           property_reference: reference,
           consent: form.get("consent") === "on",
           website: form.get("website"),
-          enquiry_key: form.get("enquiry_key"),
+          // from the ref, not the DOM — see enquiryKey
+          enquiry_key: enquiryKey.current,
           // where this came from (gnk-crm 0098): the page, an external
           // referrer's host, and the campaign the visit landed with
           source_page: window.location.pathname,
@@ -251,8 +270,10 @@ export function EnquiryForm({
       className="border border-line bg-surface p-6"
     >
       {reference ? <input type="hidden" name="property_reference" value={reference} /> : null}
-      {/* filled by the browser after mount — see keyRef; empty on the no-JavaScript path */}
-      <input type="hidden" name="enquiry_key" ref={keyRef} defaultValue="" />
+      {/* filled by the browser after mount — see enquiryKey; empty on the
+          no-JavaScript path. No defaultValue, deliberately: with one, React
+          would rewrite this input's value on every render. */}
+      <input type="hidden" name="enquiry_key" ref={keyInput} />
       <h2 className="font-display text-xl text-ink">{heading}</h2>
       {intro ? <p className="mt-2 text-sm text-ink-2">{intro}</p> : null}
       {reference ? (

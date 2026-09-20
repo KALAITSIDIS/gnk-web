@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { feedEnvelope } from "@/lib/feed-fixtures";
 import { generateMetadata } from "./page";
 
 /**
@@ -27,11 +28,9 @@ describe("a listing's metadata when the feed cannot be reached", () => {
   });
 
   it("still says 'not found' when the feed answered and holds no such reference", async () => {
+    // a well-formed, genuinely empty answer — the one shape that MAY say "not found"
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      () =>
-        Promise.resolve(
-          new Response(JSON.stringify({ listings: [], limit: 50, offset: 0 }), { status: 200 }),
-        ) as never,
+      () => Promise.resolve(new Response(JSON.stringify(feedEnvelope([])), { status: 200 })) as never,
     );
     const meta = await generateMetadata(params("PAF9999"));
     expect(meta.title).toBe("Property not found");

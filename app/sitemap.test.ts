@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { feedEnvelope, feedRow } from "@/lib/feed-fixtures";
 import sitemap from "./sitemap";
 
 /**
@@ -23,12 +24,10 @@ describe("the sitemap is whole or absent", () => {
   });
 
   it("lists every published reference when the feed answers", async () => {
+    // whole rows: the reader checks every response against the feed contract
+    // (lib/crm.validation.test.ts) and a bare `{ reference }` is not a row
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      () =>
-        ok({
-          listings: [{ reference: "PAF0001" }, { reference: "PAF0003" }, { reference: "PAF0004" }],
-          limit: 50,
-        }) as never,
+      () => ok(feedEnvelope(["PAF0001", "PAF0003", "PAF0004"].map((reference) => feedRow({ reference })))) as never,
     );
     const urls = (await sitemap()).map((e) => e.url);
     for (const ref of ["PAF0001", "PAF0003", "PAF0004"]) {
