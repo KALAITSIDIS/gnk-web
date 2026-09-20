@@ -96,9 +96,38 @@ export default async function PropertyPage({
   /* THE ORDER HERE IS THE POINT. notFound() answers 404, which tells a search
      engine the property is gone — so it may only ever be reached when the feed
      ANSWERED and genuinely does not hold this reference. If the feed could not
-     be reached we throw instead: Next then serves the last good copy of this
-     page, or the error boundary, and a live client mandate is never given a
-     404 because of a hiccup at our end. */
+     be reached we throw instead, and a live client mandate is never given a
+     404 because of a hiccup at our end.
+
+     WHAT THE THROW ACTUALLY PRODUCES, MEASURED. This comment used to end "Next
+     then serves the last good copy of this page, or the error boundary", and
+     the second half was backed by nothing — there was no error.tsx anywhere in
+     the repository. Adding one does not work either. Measured 2026-09-20 on a
+     PRODUCTION build (`next build` then `next start`, with CRM_API_URL pointed
+     at a path that 404s; `.claude/launch.json`'s gnk-web-prod config is there
+     to repeat it, because `next dev` renders every page dynamically and hides
+     this):
+
+       a cached render exists  ->  200, the real listing, x-nextjs-cache: HIT
+       no cached render        ->  500, Next's built-in page
+
+     and that 500 was byte-identical with app/error.tsx, with a segment
+     app/properties/[reference]/error.tsx, and with app/global-error.tsx. In
+     this Next a throw inside a STATICALLY GENERATED route's on-demand render
+     does not reach an error boundary at all, so one would be decoration and
+     none was shipped.
+
+     THE FIRST LINE IS THE ONE THAT MATTERS, and it holds: a listing anyone has
+     opened within `expireTime` (next.config.ts, one hour) keeps serving its
+     real content straight through an outage. The 500 is the residual case — a
+     cold cache, or a URL nobody has visited in an hour — and 500 is the right
+     answer for it: a crawler retries and keeps the URL, where a 404 drops it
+     and a 200 carrying "briefly unavailable" would be indexed as the
+     property's content. What is missing is a kinder BODY for the human in that
+     window, and a page cannot set a 5xx status; making this route dynamic
+     would buy the boundary and forfeit the 200 above, which is much the more
+     valuable half. Left as it is, deliberately, and written down so the
+     boundary is not attempted a third time. */
   if (!found.ok) throw new Error(`Feed unavailable; refusing to 404 ${reference}`);
   if (!found.listing) notFound();
   const l = found.listing;
