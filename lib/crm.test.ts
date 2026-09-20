@@ -204,15 +204,16 @@ describe("a book that moves between pages", () => {
     expect(warn, "the second read was clean, so there is nothing to report").not.toHaveBeenCalled();
   });
 
-  it("serves the union and SAYS SO when the book is still moving on the second read", async () => {
-    // Refusing would take the whole site down for a minute after every publish.
+  it("refuses a book that is still moving after every read, rather than calling it complete", async () => {
+    // It used to serve the second read's union with a console warning, whatever
+    // that union was. A catalogue we KNOW is mixed is worse than "briefly
+    // unavailable": every caller handles ok:false, and none can handle a page
+    // of listings that quietly holds a withdrawn one and omits a live one.
+    vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(globalThis, "fetch").mockImplementation(
       moving(book(60), (pass, offset) => (offset > 0 ? `snapMoving${pass}` : "snapA")) as never,
     );
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const r = await getListings();
-    expect(r.ok && r.listings.length).toBe(60);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("changed between pages twice"));
+    expect(await getListings()).toEqual({ ok: false });
   });
 
   it("does not mistake the body digest for the snapshot — one snapshot, different digests per page", async () => {
@@ -227,6 +228,157 @@ describe("a book that moves between pages", () => {
     expect(r.ok && r.listings.length).toBe(120);
     expect(f.mock.calls.length, "three pages, ONE pass").toBe(3);
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A BOOK WHOSE ROWS CHANGE — not a book whose ETag changes.
+ *
+ * Every fixture above holds one row set and varies the ETag around it, so the
+ * union of a "moved" read was always the right answer by construction and the
+ * suite could not see what a move actually costs. It costs rows: withdraw a
+ * listing after page one and the window shifts left, so the row that would have
+ * opened page two is stepped over and never returned at all.
+ *
+ * Two a page, inventory A,B,C,D:
+ *   page 1 -> A,B    A is withdrawn    page 2 (offset 2 of B,C,D) -> D
+ * The union is A,B,D. It carries a listing that is no longer for sale and omits
+ * one that is — and until this change the second such read was returned as a
+ * complete catalogue with a warning in a log.
+ */
+describe("a book whose rows change under the read", () => {
+  /**
+   * The CRM's snapshot segment is a hash OF THE PUBLISHED SET (row count |
+   * max(updated_at) | photo fingerprint, gnk-crm 0086), so a fixture that moves
+   * its rows must move that segment with them. Naming it after the inventory is
+   * the smallest faithful stand-in.
+   */
+  const withdrawing = (start: string[], withdrawAfterCall: number[], size = 2) => {
+    let inventory = [...start];
+    let call = 0;
+    return (url: string | URL | Request) => {
+      const u = new URL(String(url instanceof Request ? url.url : url));
+      const offset = Number(u.searchParams.get("offset") ?? 0);
+      const page = inventory.slice(offset, offset + size).map(listing);
+      const res = new Response(
+        JSON.stringify({ listings: page, limit: size, offset, count: page.length }),
+        { status: 200, headers: { etag: `W/"inv${inventory.join("")}-d${offset}"` } },
+      );
+      call += 1;
+      // the head of the book is unpublished between one page and the next
+      if (withdrawAfterCall.includes(call)) inventory = inventory.slice(1);
+      return Promise.resolve(res);
+    };
+  };
+
+  const refsOf = (r: Awaited<ReturnType<typeof getListings>>) =>
+    r.ok ? r.listings.map((l) => l.reference) : null;
+
+  it("keeps reading until the rows stop moving, and serves the book that settled", async () => {
+    // A,B,C,D at two a page. A is withdrawn during read 1 and B during read 2,
+    // so the true inventory ends as C,D — and read 3 is the one that sees it.
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      withdrawing(["A", "B", "C", "D"], [1, 3]) as never,
+    );
+    const r = await getListings();
+    expect(refsOf(r), "the settled book, whole").toEqual(["C", "D"]);
+  });
+
+  it("never returns the mixture the old second read would have served", async () => {
+    // THIS IS THE DEFECT, stated as an assertion. Read 1's union is A,B,D and
+    // read 2's is B,C; both are wrong, and the old getListings returned read 2's
+    // verbatim with ok:true. Written as a negative because the correct answer is
+    // already pinned above — what must never come back is either mixture.
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      withdrawing(["A", "B", "C", "D"], [1, 3]) as never,
+    );
+    const refs = refsOf(await getListings());
+    expect(refs, "read 1's union").not.toEqual(["A", "B", "D"]);
+    expect(refs, "read 2's union — what shipped before").not.toEqual(["B", "C"]);
+  });
+
+  it("refuses a book that never settles, rather than publishing a guess", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // The head is withdrawn after EVERY page, so no read is ever clean. The
+    // inventory is long enough that it cannot empty and accidentally settle.
+    const inventory = Array.from({ length: 40 }, (_, i) => "R" + String(i + 1).padStart(2, "0"));
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      withdrawing(inventory, Array.from({ length: 60 }, (_, i) => i + 1)) as never,
+    );
+    expect(await getListings()).toEqual({ ok: false });
+  });
+
+  it("does not read again when the book never moved — one read for a still book", async () => {
+    const f = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(withdrawing(["A", "B", "C", "D"], []) as never);
+    expect(refsOf(await getListings())).toEqual(["A", "B", "C", "D"]);
+    // two full pages and the short third that ends it, once
+    expect(f.mock.calls.length).toBe(3);
+  });
+});
+
+describe("the whole call is bounded, pages and retries together", () => {
+  it("stops at the deadline instead of spending fifty pages times three reads", async () => {
+    // MAX_PAGES x FEED_TIMEOUT_MS x MAX_READS is twenty minutes. Date.now is
+    // moved by the fixture so the deadline is reached deterministically and in
+    // milliseconds of real time; each page costs nine seconds, as a CRM that
+    // accepts and stalls would.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const start = Date.now();
+    let elapsed = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => start + elapsed);
+    const serve = paged(book(500), 50);
+    const f = vi.spyOn(globalThis, "fetch").mockImplementation(((url: string) => {
+      elapsed += 9000;
+      return serve(url);
+    }) as never);
+
+    expect(await getListings()).toEqual({ ok: false });
+    // 500 rows at fifty a page is ten pages; three of them exhaust 25 seconds
+    expect(f.mock.calls.length, "the deadline stopped it, not MAX_PAGES").toBe(3);
+  });
+
+  it("asks each page for only what is left of the budget", async () => {
+    const start = Date.now();
+    let elapsed = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => start + elapsed);
+    const serve = paged(book(120), 50);
+    const f = vi.spyOn(globalThis, "fetch").mockImplementation(((url: string) => {
+      elapsed += 20_000; // one very slow page
+      return serve(url);
+    }) as never);
+    await getListings();
+    // page one gets the full per-page timeout; page two gets the 5s remaining
+    const budgets = f.mock.calls.map(([, init]) => (init as RequestInit).signal);
+    expect(budgets.every((s) => s instanceof AbortSignal)).toBe(true);
+    expect(f.mock.calls.length, "the second page is the last the budget allows").toBe(2);
+  });
+});
+
+describe("a row the site could not link to is not part of the book", () => {
+  it("drops a row with no reference, and keeps the rest", async () => {
+    // `seen.has(undefined)` is false the first time, so such a row used to be
+    // pushed whole: the sitemap then carried /properties/undefined and every
+    // later reference-less row was folded silently into that one entry.
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (() =>
+        ok({
+          listings: [listing("PAF0001"), { kind: "standalone" }, { reference: "  " }, listing("PAF0002")],
+        })) as never,
+    );
+    const r = await getListings();
+    expect(r.ok && r.listings.map((l) => l.reference)).toEqual(["PAF0001", "PAF0002"]);
+    expect(err, "dropped, and said so").toHaveBeenCalled();
+  });
+
+  it("does not throw looking for one listing among rows without references", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (() => ok({ listings: [{ kind: "standalone" }, listing("PAF0001")] })) as never,
+    );
+    expect(await getListing("PAF0001")).toEqual({ ok: true, listing: listing("PAF0001") });
+    expect(await getListing("PAF9999")).toEqual({ ok: true, listing: null });
   });
 });
 

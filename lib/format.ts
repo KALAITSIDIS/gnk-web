@@ -332,21 +332,75 @@ export function isUnderConstruction(l: Listing): boolean {
   return PRE_COMPLETION.has(l.construction_status ?? "");
 }
 
+/**
+ * A CALENDAR DAY, rendered as that day in every runtime.
+ *
+ * `delivery_date` is a `date` column (gnk-crm 0001_foundations.sql:224, and
+ * the feed's own row type declares it `date` at 0066:186), so PostgREST sends
+ * `2099-10-01` — a day, with no instant and no zone in it. `new Date(...)` on
+ * that string nevertheless produces an INSTANT, UTC midnight, and a formatter
+ * with no `timeZone` renders that instant in whatever zone the process happens
+ * to be in. Measured on this repository:
+ *
+ *   UTC                1 October 2099
+ *   Europe/Nicosia     1 October 2099
+ *   America/New_York   30 September 2099   <- the day before
+ *
+ * Production functions run in UTC, so no visitor has been shown the wrong day;
+ * the defect is that nothing STOPS it. Any runtime west of UTC — a developer's
+ * machine, a CI runner with TZ set, a region added later — publishes a handover
+ * a day early. lib/format.test.ts pinned the UTC answer, so that assertion was
+ * green for the machine it ran on rather than for the code; forcing TZ=UTC in
+ * CI would have hidden precisely that.
+ *
+ * So the day is formatted IN UTC, from a value parsed as UTC. The two agree by
+ * construction and no ambient zone takes part. Europe/Nicosia would render
+ * identically — it is east of UTC, so UTC midnight is the same calendar day
+ * there — and UTC is chosen because it is what the column already means.
+ */
 const DATE_FMT = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",
   year: "numeric",
+  timeZone: "UTC",
 });
+
+/** `2099-10-01`, exactly — the one shape a `date` column is serialised as. */
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * The feed's `delivery_date` as an instant, or null when it is not a date.
+ *
+ * A date-only value is read as UTC midnight of that calendar day, which is what
+ * `new Date("2099-10-01")` already produced — so the expiry comparison in
+ * deliveryLabel is unchanged, and the business rule with it. Anything else (a
+ * full timestamp, were the column ever to become one) still parses, and is
+ * still rendered in UTC rather than in the process's zone.
+ */
+function deliveryInstant(raw: string): Date | null {
+  const m = DATE_ONLY.exec(raw.trim());
+  const d = m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))) : new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  // Date.UTC rolls `2099-13-45` over into another month rather than refusing
+  // it. A day the CRM's `date` column cannot hold is not a day to publish.
+  if (m && d.toISOString().slice(0, 10) !== `${m[1]}-${m[2]}-${m[3]}`) return null;
+  return d;
+}
 
 /**
  * An expected handover, or nothing. Only for something still being built, and
  * only while the date is still ahead — a delivery date that has already passed
  * is stale data, and republishing it as a promise is worse than silence.
+ *
+ * "Already passed" is measured against the instant at which UTC midnight of
+ * that day begins, which is what it has always been measured against. Moving
+ * that boundary — to Cyprus's day, say — would be a decision about what the
+ * firm promises, not a formatting fix, and is deliberately not taken here.
  */
 export function deliveryLabel(l: Listing): string | null {
   if (!isUnderConstruction(l) || !l.delivery_date) return null;
-  const d = new Date(l.delivery_date);
-  if (Number.isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
+  const d = deliveryInstant(l.delivery_date);
+  if (!d || d.getTime() <= Date.now()) return null;
   return DATE_FMT.format(d);
 }
 

@@ -133,6 +133,11 @@ interface FeedResponse {
  * Google's index) while the home page announced the firm had no properties.
  * Callers now get { ok: false } and can say "briefly unavailable", which is
  * what the paragraph above always claimed happened.
+ *
+ * `{ ok: false }` means "we could not read the book", and `{ ok: true,
+ * listings: [] }` means "we read it and it is empty". The two must never
+ * collapse into one another, in either direction — a mixed book reported
+ * `ok: true` is the same lie wearing the other face.
  */
 export type FeedResult = { ok: true; listings: Listing[] } | { ok: false };
 
@@ -147,33 +152,83 @@ const FEED_TIMEOUT_MS = 8000;
  * rather than carrying its own copy of the number, and stops on the first short
  * page. Nothing partial is ever served: a page that fails, or a feed that keeps
  * returning full pages past MAX_PAGES, is {ok:false} for the whole call.
- *
- * Between pages the book can lawfully change — the CRM's edge holds a body for
- * up to 60s, so page 2 may come from a newer snapshot than page 1. The ETag's
- * hash prefix is that snapshot's name; on a mismatch the loop runs once more,
- * and if the book is still moving it serves the union and says so, because
- * refusing would take the whole site down for a minute after every publish.
  */
 const MAX_PAGES = 50;
 
+/**
+ * How many times the whole book may be read before the site gives up on getting
+ * a clean one.
+ *
+ * Between pages the book can lawfully change — the CRM's edge holds a body for
+ * up to 60s, so page 2 may come from a newer snapshot than page 1 — and when it
+ * does, a paged read LOSES ROWS. Withdraw a listing after page 1 and the window
+ * shifts left by one, so the row that would have opened page 2 is stepped over
+ * and never returned. With A,B,C,D at two a page: page 1 gives A,B; A is
+ * withdrawn; page 2 gives D. The union is A,B,D — it carries a listing that is
+ * no longer for sale and is missing one that is.
+ *
+ * Until this change the second read's result was returned WHATEVER it was, so a
+ * book that moved twice was served as a complete catalogue with a warning in a
+ * log nobody reads. Reading again is the right instinct and one more read was
+ * simply not enough of it: three reads, and if the book is still moving after
+ * all three, {ok:false} — "briefly unavailable", which every caller already
+ * handles (the home page and /properties say so, the sitemap 5xxs so a crawler
+ * keeps its last copy, a listing page is unaffected because it fetches its own
+ * row). A catalogue we know to be wrong is worse than one we admit we cannot
+ * read.
+ */
+const MAX_READS = 3;
+
+/**
+ * The ceiling on everything below: pagination, retries and all.
+ *
+ * MAX_PAGES x FEED_TIMEOUT_MS x MAX_READS is twenty minutes, which is not a
+ * bound, it is an absence of one. Nobody waits that long and no platform lets
+ * them; the render is killed and the visitor gets a gateway error instead of
+ * the graceful degradation this whole module is built for. One deadline covers
+ * every request, and the per-page timeout below is whatever is left of it.
+ */
+const FEED_DEADLINE_MS = 25_000;
+
 export async function getListings(): Promise<FeedResult> {
-  const first = await readAllPages();
-  if (!first.result.ok || !first.moved) return first.result;
-  const again = await readAllPages();
-  if (again.result.ok && again.moved) {
-    report({
-      event: "crm.feed.unstable",
-      level: "warning",
-      log: ["[crm] feed changed between pages twice; serving the union"],
-    });
+  const deadline = Date.now() + FEED_DEADLINE_MS;
+  for (let read = 0; read < MAX_READS; read++) {
+    const attempt = await readAllPages(deadline);
+    // A transport failure is its own answer and reading again will not mend it.
+    if (!attempt.result.ok) return attempt.result;
+    if (!attempt.moved) return attempt.result;
+    if (Date.now() >= deadline) break;
   }
-  return again.result;
+  report({
+    event: "crm.feed.unstable",
+    level: "error",
+    log: [`[crm] feed still moving after ${MAX_READS} reads; refusing a book we know is mixed`],
+    extra: { reads: MAX_READS },
+  });
+  return { ok: false };
 }
 
 /** The pages read, plus whether the book moved underneath the read. */
 type PagedRead = { result: FeedResult; moved: boolean };
 
-async function readAllPages(): Promise<PagedRead> {
+/**
+ * WHAT `moved` DOES AND DOES NOT PROVE.
+ *
+ * The ETag's first segment is `public_listings_etag()` — md5 of (published row
+ * count | max(updated_at) | a fingerprint of the photo set), gnk-crm 0086. Two
+ * pages carrying DIFFERENT segments prove the book changed between them, and
+ * that is the whole of what is relied on here.
+ *
+ * The converse does not hold and is not claimed. The CRM computes the snapshot
+ * and reads the page in two separate round trips with no transaction between
+ * them (gnk-crm app/api/public/listings/route.ts), so a change landing in that
+ * gap is invisible to it; and the hash itself could in principle survive one
+ * (a publish and an unpublish in the same instant keep the count). Equal
+ * segments mean "nothing this validator can see has moved", not "one snapshot".
+ * The old comment here said the segment WAS the snapshot's name, which read as
+ * a guarantee the producer does not give.
+ */
+async function readAllPages(deadline: number): Promise<PagedRead> {
   const listings: Listing[] = [];
   const seen = new Set<string>();
   let offset = 0;
@@ -181,6 +236,17 @@ async function readAllPages(): Promise<PagedRead> {
   let moved = false;
   try {
     for (let page = 0; page < MAX_PAGES; page++) {
+      // Whatever is left of the call's budget, never more than one page's worth.
+      const budget = Math.min(FEED_TIMEOUT_MS, deadline - Date.now());
+      if (budget <= 0) {
+        report({
+          event: "crm.feed.deadline",
+          level: "error",
+          log: [`[crm] feed read ran past ${FEED_DEADLINE_MS}ms at offset ${offset}`],
+          extra: { offset, deadlineMs: FEED_DEADLINE_MS },
+        });
+        return { result: { ok: false }, moved };
+      }
       const res = await fetch(
         `${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&offset=${offset}`,
         {
@@ -189,7 +255,7 @@ async function readAllPages(): Promise<PagedRead> {
           // Without this a CRM that accepts the connection and never answers
           // hangs until the platform kills the function, and the visitor gets
           // a 504 on the home page rather than the graceful degradation below.
-          signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+          signal: AbortSignal.timeout(budget),
         },
       );
       if (!res.ok) {
@@ -217,6 +283,22 @@ async function readAllPages(): Promise<PagedRead> {
         else if (prefix !== snapshot) moved = true;
       }
       for (const l of body.listings) {
+        /* A REFERENCE IS THE ROW'S IDENTITY: it is the dedup key here, the URL
+           of the page, and the entry in the sitemap. A row without one used to
+           pass straight through — `seen.has(undefined)` is false the first time
+           — so the first such row became /properties/undefined in the sitemap
+           and every subsequent one was silently folded into it. Drop it and say
+           so: the rest of the book is still serveable, and a row nothing can
+           link to is not part of it. */
+        if (typeof l?.reference !== "string" || l.reference.trim() === "") {
+          report({
+            event: "crm.feed.row-without-reference",
+            level: "error",
+            log: ["[crm] feed row carried no reference; dropped"],
+            extra: { offset },
+          });
+          continue;
+        }
         if (seen.has(l.reference)) continue; // a boundary duplicate from a moving book
         seen.add(l.reference);
         listings.push(l);
@@ -291,7 +373,15 @@ export async function getListing(reference: string): Promise<ListingResult> {
       });
       return { ok: false };
     }
-    return { ok: true, listing: body.listings.find((l) => l.reference.toLowerCase() === wanted) ?? null };
+    /* `l?.reference` is not defensive noise: the CRM answers this call with the
+       feed's first PAGE when it does not know `?reference=`, so whatever a row
+       without one would do in readAllPages it would do here too — and here it
+       would throw inside a find(), which the catch below would report as an
+       unreachable feed. A row with no reference simply is not the one asked for. */
+    const listing =
+      body.listings.find((l) => typeof l?.reference === "string" && l.reference.toLowerCase() === wanted) ??
+      null;
+    return { ok: true, listing };
   } catch (err) {
     report({
       event: "crm.listing.failed",
