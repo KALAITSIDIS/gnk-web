@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Listing } from "@/lib/crm";
 import {
   CURRENCY,
@@ -243,6 +243,113 @@ describe("a delivery date is a promise, so it is only made when it can be kept",
   it("survives an unparseable date without rendering NaN", () => {
     const bad = { ...development, delivery_date: "not a date" } as Listing;
     expect(deliveryLabel(bad)).toBeNull();
+  });
+
+  it("refuses a day that is not a day, rather than rolling it into another month", () => {
+    // Date.UTC(2099, 12, 1) is a real instant in January 2100. A value the
+    // CRM's `date` column cannot hold must not be published as some other day.
+    for (const raw of ["2099-13-01", "2099-02-30", "2099-00-10"]) {
+      expect(deliveryLabel({ ...development, delivery_date: raw } as Listing), raw).toBeNull();
+    }
+  });
+});
+
+/**
+ * `delivery_date` is a `date` — a calendar day, not an instant.
+ *
+ * TZ cannot be set per test: Node on Windows honours it for `UTC` alone, and
+ * forcing the whole suite to UTC is the very thing that would hide this. So the
+ * hazard is reproduced directly instead — one instant, formatted in three named
+ * zones — and the label is required to agree with the STORED day whatever those
+ * three say.
+ */
+describe("a stored day is published as that day, wherever the renderer runs", () => {
+  const ZONES = ["UTC", "Europe/Nicosia", "America/New_York"] as const;
+  /** What a formatter with no explicit zone would render, were it running in `tz`. */
+  const asRenderedIn = (tz: string, iso: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: tz,
+    }).format(new Date(iso));
+
+  it("the hazard is real: one instant is two different days in two zones", () => {
+    // If this ever stops being true the assertions below stop proving anything,
+    // and this line is what would say so rather than a suite quietly passing.
+    const rendered = new Set(ZONES.map((tz) => asRenderedIn(tz, "2099-10-01")));
+    expect(rendered.size, [...rendered].join(" | ")).toBeGreaterThan(1);
+    expect(asRenderedIn("America/New_York", "2099-10-01")).toBe("30 September 2099");
+  });
+
+  it("publishes the calendar day the CRM stored, not the day a zone makes of it", () => {
+    // Month and year boundaries and a leap day — where an hour's drift changes
+    // more than the number.
+    for (const [stored, expected] of [
+      ["2099-10-01", "1 October 2099"],
+      ["2099-01-01", "1 January 2099"],
+      ["2099-12-31", "31 December 2099"],
+      ["2096-02-29", "29 February 2096"],
+    ] as const) {
+      expect(deliveryLabel({ ...development, delivery_date: stored } as Listing), stored).toBe(
+        expected,
+      );
+    }
+  });
+
+  /**
+   * THE ONE THAT BITES ANYWHERE.
+   *
+   * For a date-only value every zone at or east of UTC renders the same day —
+   * offsets are under 24 hours — so no input can tell the fixed code from the
+   * broken code on a machine in, say, Europe/Nicosia, and CI runs in UTC. An
+   * assertion that can only fail on a runner nobody uses is not coverage.
+   *
+   * So the ambient zone is moved instead of the date: `Intl.DateTimeFormat` is
+   * patched to inject America/New_York into any formatter built WITHOUT an
+   * explicit `timeZone`, and lib/format.ts is re-imported so its module-level
+   * formatter is built under the patch. A formatter that pins its zone is
+   * untouched; one that does not picks up New York and renders the day before.
+   * Removing `timeZone: "UTC"` from DATE_FMT fails this test in every zone.
+   */
+  it("is immune to the ambient zone, proven by moving it", async () => {
+    const Original = Intl.DateTimeFormat;
+    const patched = function (locale?: unknown, opts?: Intl.DateTimeFormatOptions) {
+      return new Original(
+        locale as string,
+        opts?.timeZone ? opts : { ...opts, timeZone: "America/New_York" },
+      );
+    } as unknown as typeof Intl.DateTimeFormat;
+    patched.supportedLocalesOf = Original.supportedLocalesOf.bind(Original);
+    const install = (v: typeof Intl.DateTimeFormat) =>
+      Object.defineProperty(Intl, "DateTimeFormat", { value: v, configurable: true, writable: true });
+
+    try {
+      install(patched);
+      // the patch works: an unpinned formatter now renders New York's day
+      expect(new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" })
+        .format(new Date("2099-10-01"))).toBe("30 September 2099");
+
+      vi.resetModules();
+      const fresh = (await import("./format")) as typeof import("./format");
+      expect(
+        fresh.deliveryLabel({ ...development, delivery_date: "2099-10-01" } as Listing),
+        "the stored day, not the ambient zone's",
+      ).toBe("1 October 2099");
+    } finally {
+      install(Original);
+      vi.resetModules();
+    }
+  });
+
+  it("keeps the expiry rule exactly where it was: UTC midnight of the stored day", () => {
+    // The rule is "a date that has passed is not a promise". Its boundary is
+    // the instant UTC midnight begins, unchanged by this fix — yesterday is
+    // withheld, the day after tomorrow is published.
+    const day = (offsetDays: number) =>
+      new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
+    expect(deliveryLabel({ ...development, delivery_date: day(-1) } as Listing)).toBeNull();
+    expect(deliveryLabel({ ...development, delivery_date: day(2) } as Listing)).not.toBeNull();
   });
 });
 
