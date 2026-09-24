@@ -202,9 +202,12 @@ describe("the brief and its provenance travel as meta", () => {
  * no, and the caller got a 502 "That did not send" — while Sentry got an
  * error-level `enquiry.refused`, the report that exists for a REAL enquiry
  * turned away. The same rule here makes it the site's own 400, in the site's
- * words, before anything is forwarded or reported. A visitor cannot reach it:
- * a one-line input cannot hold a break (Chromium turns a pasted newline into a
- * space). A script can. The message stays multiline.
+ * words, before anything is forwarded or reported. Mostly a script's case: a
+ * one-line input drops LF and CR (Chromium turns a pasted newline into a
+ * space). But the browser keeps VT, FF, NEL, U+2028 and U+2029, so a visitor
+ * who PASTES one inside a name or number meets this too — and now reads a
+ * sentence they can act on instead of "That did not send". The message stays
+ * multiline.
  */
 describe("a line break in a one-line field", () => {
   const sent = () => vi.mocked(submitEnquiry).mock.calls.at(-1)![0];
@@ -294,9 +297,24 @@ describe("a line break in a one-line field", () => {
 
   it("trims a break at either end like a space, as before — only an embedded one is refused", async () => {
     fresh();
-    expect((await post({ ...valid, name: "\nA Buyer\r\n", phone: " +357 99 123456\n" })).status).toBe(202);
+    expect(
+      (await post({ ...valid, name: "\nA Buyer\r\n", phone: " +357 99 123456\n", property_reference: "PAF0001\r\n" })).status,
+    ).toBe(202);
     expect(sent().name).toBe("A Buyer");
     expect(sent().phone).toBe("+357 99 123456");
+    expect(sent().property_reference).toBe("PAF0001");
+  });
+
+  it("names the break, not the length, when an over-long value also carries one", async () => {
+    fresh();
+    await refusedBeforeForwarding(await post({ ...valid, name: `${"x".repeat(200)}\nmore` }), "Please write your name on one line.");
+    fresh();
+    await refusedBeforeForwarding(await post({ ...valid, phone: `${"9".repeat(40)}\n1` }), "Please write your phone number on one line.");
+    fresh();
+    await refusedBeforeForwarding(
+      await post({ ...valid, property_reference: `${"R".repeat(40)}\nEmail: other@x.invalid` }),
+      "The property reference must be on one line.",
+    );
   });
 
   it("keeps a blank-only name a missing name", async () => {
