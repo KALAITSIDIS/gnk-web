@@ -10,6 +10,7 @@ import {
   describeProperty,
   FIELD_CAPS,
   describeRequirement,
+  hasLineBreak,
   PROVENANCE_CAPS,
   PROVENANCE_KEYS,
   sameSitePath,
@@ -48,12 +49,40 @@ const capped = (max: number) =>
       return t && t.length <= max ? t : undefined;
     });
 
+/**
+ * One line, for a value the CRM writes onto one line of its enquiry header
+ * (gnk-crm 0114; LINE_BREAK_CODE_POINTS says why). Checked right after the
+ * trim, so a break at either end goes with the spaces and only one INSIDE the
+ * value is refused, and before the caps, so a long value with a break is told
+ * about the break. JavaScript's trim does not count NEL as whitespace, so a
+ * NEL is refused wherever it sits — as the CRM refuses it.
+ */
+const oneLine = (message: string) => [(v: string) => !hasLineBreak(v), message] as const;
+
 const schema = z.object({
-  name: z.string().trim().min(1, "Please tell us your name.").max(200),
+  name: z
+    .string()
+    .trim()
+    .refine(...oneLine("Please write your name on one line."))
+    .min(1, "Please tell us your name.")
+    .max(200),
+  // an address with a line break in it is not an address: z.email refuses it
   email: z.union([z.email("That email address does not look right."), z.literal("")]).optional(),
-  phone: z.string().trim().max(40).optional(),
+  phone: z
+    .string()
+    .trim()
+    .refine(...oneLine("Please write your phone number on one line."))
+    .max(40)
+    .optional(),
+  // the visitor's own words: written BELOW the CRM's header, so they stay multiline
   message: z.string().trim().max(5000).optional(),
-  property_reference: z.string().trim().max(40).optional(),
+  // set by the listing page, never typed — a break here is a script's
+  property_reference: z
+    .string()
+    .trim()
+    .refine(...oneLine("The property reference must be on one line."))
+    .max(40)
+    .optional(),
   /** Consent is recorded because the CRM stores personal data (GDPR Art. 6). */
   consent: z.literal(true, { message: "Please confirm you are happy for us to reply." }),
   website: z.string().max(200).optional(),
