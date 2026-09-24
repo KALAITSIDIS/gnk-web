@@ -21,6 +21,16 @@ retries a timed-out post exactly once with the same key instead of risking a
 second lead — and never retries without one (the no-JavaScript path posts no
 key). The form waits 20 s for the route, which gives the CRM 8 s twice.
 
+The route also refuses a line break inside the name, e-mail, phone or
+reference before forwarding anything: the CRM writes those four onto one line
+each of the header its desk reads the person back from, and refuses a break
+in them itself (its migration 0114). The set is a pinned copy of the CRM's
+(`LINE_BREAK_CODE_POINTS` in `lib/enquiry-fields.ts`). A one-line input drops
+LF and CR, so this is mostly a script's case; a visitor meets it only by
+pasting one of the rarer separators (U+2028, NEL, …) inside a name or number.
+Either way the answer is the site's own 400 with a sentence to act on, never a
+forwarded refusal and an `enquiry.refused` report. The message stays multiline.
+
 Both are unauthenticated and rate-limited on the CRM side, and each is bounded
 differently — worth stating precisely, because "RLS-bound" stopped being true
 of the second one. The **feed** is an anon-scoped `security definer` function

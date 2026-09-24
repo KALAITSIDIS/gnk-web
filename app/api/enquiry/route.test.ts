@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { submitEnquiry } from "@/lib/crm";
-import { CONSENT_VERSION } from "@/lib/enquiry-fields";
+import { CONSENT_VERSION, LINE_BREAK_CODE_POINTS } from "@/lib/enquiry-fields";
+import { report } from "@/lib/report";
 import { POST } from "./route";
 
 /**
@@ -16,6 +17,11 @@ const state = vi.hoisted(() => ({
     | { ok: false; error: string; status?: number; retryAfter?: string | null },
 }));
 vi.mock("@/lib/crm", () => ({ submitEnquiry: vi.fn(async () => state.result) }));
+// the real report, watched: a refused enquiry must be reported, a refused SHAPE must not
+vi.mock("@/lib/report", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/report")>();
+  return { ...actual, report: vi.fn(actual.report) };
+});
 
 const post = (body: Record<string, unknown>) =>
   POST(
@@ -182,5 +188,170 @@ describe("the brief and its provenance travel as meta", () => {
     vi.mocked(submitEnquiry).mockClear();
     expect((await post({ ...valid, utm_campaign: "x".repeat(121) })).status).toBe(202);
     expect(sent().meta?.utm_campaign).toBeUndefined();
+  });
+});
+
+/**
+ * gnk-crm T-enquiry-identity-single-line (PR #59, migration 0114). The CRM's
+ * door writes the name, e-mail, phone and reference onto ONE line each of the
+ * header the desk reads the person back from, and a line break in one of them
+ * wrote a line of its own: a phone of "+35799123456\nEmail: other@x.invalid"
+ * became the lead's e-mail. The CRM now refuses a break in any of the four.
+ *
+ * This route refused nothing of the kind. It forwarded the body, the CRM said
+ * no, and the caller got a 502 "That did not send" — while Sentry got an
+ * error-level `enquiry.refused`, the report that exists for a REAL enquiry
+ * turned away. The same rule here makes it the site's own 400, in the site's
+ * words, before anything is forwarded or reported. Mostly a script's case: a
+ * one-line input drops LF and CR (Chromium turns a pasted newline into a
+ * space). But the browser keeps VT, FF, NEL, U+2028 and U+2029, so a visitor
+ * who PASTES one inside a name or number meets this too — and now reads a
+ * sentence they can act on instead of "That did not send". The message stays
+ * multiline.
+ */
+describe("a line break in a one-line field", () => {
+  const sent = () => vi.mocked(submitEnquiry).mock.calls.at(-1)![0];
+
+  /** A 400 in the site's words, and nothing forwarded, reported or logged. */
+  async function refusedBeforeForwarding(res: Response, sentence: string) {
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe(sentence);
+    expect(submitEnquiry, "never forwarded to the CRM").not.toHaveBeenCalled();
+    expect(report, "never reported as a refused enquiry").not.toHaveBeenCalled();
+  }
+
+  const fresh = () => {
+    state.result = { ok: true };
+    vi.mocked(submitEnquiry).mockClear();
+    vi.mocked(report).mockClear();
+  };
+
+  it("refuses the audit's case A — a phone carrying an Email: line", async () => {
+    fresh();
+    const res = await post({
+      ...valid,
+      name: "Example Buyer",
+      phone: "+35799123456\nEmail: other@x.invalid",
+      message: "Please contact me.",
+    });
+    await refusedBeforeForwarding(res, "Please write your phone number on one line.");
+  });
+
+  it("refuses the audit's case B — a five-line name — as a line break, not a missing name", async () => {
+    fresh();
+    const res = await post({ ...valid, name: "Example\nextra\nextra\nextra\nextra", phone: "+35799123456" });
+    await refusedBeforeForwarding(res, "Please write your name on one line.");
+  });
+
+  it("refuses CR and CRLF as well as LF, in the name and in the phone", async () => {
+    for (const br of ["\r", "\r\n", "\n\n"]) {
+      fresh();
+      await refusedBeforeForwarding(await post({ ...valid, name: `Ann${br}Smith` }), "Please write your name on one line.");
+      fresh();
+      await refusedBeforeForwarding(await post({ ...valid, phone: `99${br}123456` }), "Please write your phone number on one line.");
+    }
+  });
+
+  it("refuses every break the CRM refuses — U+2028 and NEL included", async () => {
+    for (const cp of LINE_BREAK_CODE_POINTS) {
+      fresh();
+      const res = await post({ ...valid, name: `Ann${String.fromCodePoint(cp)}Email: other@x.invalid` });
+      expect(res.status, `U+${cp.toString(16).padStart(4, "0")}`).toBe(400);
+      expect(submitEnquiry).not.toHaveBeenCalled();
+    }
+    // JavaScript's trim does not count NEL as whitespace, so even a trailing one is refused
+    fresh();
+    await refusedBeforeForwarding(await post({ ...valid, name: `Ann${String.fromCodePoint(0x85)}` }), "Please write your name on one line.");
+  });
+
+  it("refuses a reference with an injected line — the CRM writes it onto the About line", async () => {
+    fresh();
+    const res = await post({ ...valid, property_reference: "PAF0001\nEmail: other@x.invalid" });
+    await refusedBeforeForwarding(res, "The property reference must be on one line.");
+  });
+
+  it("refuses an e-mail with a line break as the address it is not", async () => {
+    fresh();
+    await refusedBeforeForwarding(await post({ ...valid, email: "buyer@example.invalid\nPhone: 1" }), "That email address does not look right.");
+  });
+
+  it("refuses on the no-JavaScript path too, with the page it always answers with", async () => {
+    fresh();
+    const res = await POST(
+      new Request("https://gnk-web.vercel.app/api/enquiry", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          name: "Example\nEmail: other@x.invalid",
+          email: "buyer@example.invalid",
+          consent: "on",
+        }).toString(),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toContain("Please write your name on one line.");
+    expect(submitEnquiry).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it("trims a break at either end like a space, as before — only an embedded one is refused", async () => {
+    fresh();
+    expect(
+      (await post({ ...valid, name: "\nA Buyer\r\n", phone: " +357 99 123456\n", property_reference: "PAF0001\r\n" })).status,
+    ).toBe(202);
+    expect(sent().name).toBe("A Buyer");
+    expect(sent().phone).toBe("+357 99 123456");
+    expect(sent().property_reference).toBe("PAF0001");
+  });
+
+  it("names the break, not the length, when an over-long value also carries one", async () => {
+    fresh();
+    await refusedBeforeForwarding(await post({ ...valid, name: `${"x".repeat(200)}\nmore` }), "Please write your name on one line.");
+    fresh();
+    await refusedBeforeForwarding(await post({ ...valid, phone: `${"9".repeat(40)}\n1` }), "Please write your phone number on one line.");
+    fresh();
+    await refusedBeforeForwarding(
+      await post({ ...valid, property_reference: `${"R".repeat(40)}\nEmail: other@x.invalid` }),
+      "The property reference must be on one line.",
+    );
+  });
+
+  it("keeps a blank-only name a missing name", async () => {
+    fresh();
+    await refusedBeforeForwarding(await post({ ...valid, name: "\n\n" }), "Please tell us your name.");
+  });
+
+  it("forwards a multiline message whole, header-shaped lines and all", async () => {
+    fresh();
+    const message = "Is it still available?\nEmail: my old address bounced\r\nPhone: after 6\n\nName: that is my husband's";
+    expect((await post({ ...valid, message })).status).toBe(202);
+    expect(sent().message?.startsWith(`${message}\n\n`)).toBe(true);
+  });
+
+  it("forwards real names and international numbers exactly as typed", async () => {
+    for (const [name, phone] of [
+      ["Γιώργος Παπαδόπουλος", "+357 99 123456"],
+      ["Анна-Мария Иванова", "+7 (495) 123-45-67"],
+      ["Seán O'Brien", "(+44) 20 7946 0958"],
+      ["Jean-Luc Picard-Smith", "00357 99 123456 ext. 12"],
+    ]) {
+      fresh();
+      expect((await post({ ...valid, name, phone })).status, name).toBe(202);
+      expect(sent().name).toBe(name);
+      expect(sent().phone).toBe(phone);
+    }
+  });
+
+  it("keeps the caps and the optional fields as they were", async () => {
+    fresh();
+    expect((await post({ ...valid, name: "Ω".repeat(200) })).status).toBe(202);
+    expect((await post({ ...valid, name: "Ω".repeat(201) })).status).toBe(400);
+    expect((await post({ ...valid, phone: "9".repeat(41) })).status).toBe(400);
+    expect((await post({ ...valid, property_reference: "R".repeat(41) })).status).toBe(400);
+    fresh();
+    expect((await post({ ...valid, phone: "", property_reference: "" })).status).toBe(202);
+    expect(sent().phone).toBeUndefined();
+    expect(sent().property_reference).toBeUndefined();
   });
 });

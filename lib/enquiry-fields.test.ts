@@ -14,6 +14,8 @@ import {
   BUYER_KEYS,
   CONSENT_VERSION,
   campaignFromSearch,
+  hasLineBreak,
+  LINE_BREAK_CODE_POINTS,
   readCampaign,
   referrerHost,
   rememberCampaign,
@@ -177,6 +179,56 @@ describe("the vocabulary is the CRM's, pinned", () => {
     expect([...DEED_STATUSES].map((d) => d.value).sort()).toEqual(
       [...CRM_PROPERTY_TYPES.deedStatuses].sort(),
     );
+  });
+});
+
+/**
+ * What "a line break" means is the CRM's to say (gnk-crm T-enquiry-identity-
+ * single-line, PR #59): its door refuses one in the name, e-mail, phone and
+ * reference, and the site's route refuses the same set first, so a script's
+ * post is the site's 400 rather than a forwarded refusal. A PINNED COPY, like
+ * the vocabulary above, checkable with the CRM checkout:
+ *   git -C ../gnk-crm show e5d6190:lib/validators/single-line.ts
+ * If the CRM's set changes, re-pin here with the new commit — a set smaller
+ * than the CRM's sends its refusals back to being 502s and error reports.
+ */
+const CRM_LINE_BREAKS = {
+  source: "gnk-crm@e5d6190 lib/validators/single-line.ts LINE_BREAK_CODE_POINTS",
+  list: [0x0a, 0x0b, 0x0c, 0x0d, 0x85, 0x2028, 0x2029],
+};
+
+describe("a line break is the CRM's line break, pinned", () => {
+  const ch = (cp: number) => String.fromCodePoint(cp);
+
+  it("is exactly the CRM's set: Unicode's mandatory breaks", () => {
+    expect([...LINE_BREAK_CODE_POINTS]).toEqual(CRM_LINE_BREAKS.list);
+  });
+
+  it("finds each of them anywhere in a value", () => {
+    for (const cp of LINE_BREAK_CODE_POINTS) {
+      expect(hasLineBreak(`Ann${ch(cp)}Smith`), cp.toString(16)).toBe(true);
+      expect(hasLineBreak(`${ch(cp)}Ann`), cp.toString(16)).toBe(true);
+      expect(hasLineBreak(`Ann${ch(cp)}`), cp.toString(16)).toBe(true);
+    }
+    expect(hasLineBreak("+35799123456\r\nEmail: other@x.invalid")).toBe(true);
+  });
+
+  it("passes real names and numbers, and whitespace that is not a break", () => {
+    for (const v of [
+      "Maria Georgiou",
+      "Seán O'Brien",
+      "Jean-Luc Picard-Smith",
+      "Γιώργος Παπαδόπουλος",
+      "Анна-Мария Иванова",
+      "+357 99 123456",
+      "(+44) 20 7946 0958",
+      "+7 (495) 123-45-67",
+      "Ann\tSmith",
+      `Ann${ch(0xa0)}Smith`,
+      "",
+    ]) {
+      expect(hasLineBreak(v), v).toBe(false);
+    }
   });
 });
 

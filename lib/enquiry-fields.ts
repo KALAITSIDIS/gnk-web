@@ -224,6 +224,31 @@ export function describeProperty(f: SellerFields): string | null {
  */
 export const CRM_MESSAGE_CAP = 5000;
 
+/**
+ * What the CRM calls a line break, and refuses inside a name, e-mail, phone or
+ * reference (gnk-crm T-enquiry-identity-single-line, PR #59, migration 0114).
+ *
+ * The CRM writes those four onto ONE line each of the header its desk reads
+ * the person back from; a break inside one wrote a line of its own, and a
+ * phone of "+35799123456\nEmail: other@x.invalid" became the lead's e-mail.
+ * The route refuses the same set first, so a script's post is the site's own
+ * 400 instead of a forwarded refusal — a 502 and an `enquiry.refused` report
+ * meant for a real enquiry turned away. Unicode's mandatory breaks, not only
+ * the two a keyboard makes: LF, VT, FF, CR, NEL, LINE SEPARATOR, PARAGRAPH
+ * SEPARATOR. A PINNED COPY of gnk-crm `lib/validators/single-line.ts`;
+ * enquiry-fields.test.ts holds the commit it was copied from.
+ */
+export const LINE_BREAK_CODE_POINTS = [0x0a, 0x0b, 0x0c, 0x0d, 0x85, 0x2028, 0x2029] as const;
+
+const LINE_BREAKS: ReadonlySet<number> = new Set(LINE_BREAK_CODE_POINTS);
+
+export function hasLineBreak(value: string): boolean {
+  for (const ch of value) {
+    if (LINE_BREAKS.has(ch.codePointAt(0)!)) return true;
+  }
+  return false;
+}
+
 const CONSENT_LINE = "— Consent given to be contacted about this enquiry.";
 const TRIMMED_MARK = "\n\n[The rest of this message did not fit — ask them for it.]";
 
