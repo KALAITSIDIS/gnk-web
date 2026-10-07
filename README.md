@@ -58,9 +58,9 @@ a public feed.
 The second is `SITE_REVALIDATE_KEY` (since 2026-09-13). It proves to THIS
 site that a knock on `/api/revalidate` came from the CRM, which knocks after
 a write that changes a listing's public face; the site then rebuilds the home
-page, the list and that listing on their next request instead of waiting for
-its timers. A holder can make the site re-read a public feed a little sooner,
-and nothing else.
+page, the list and that listing — or, after a bulk change, every listing page
+— on their next request instead of waiting for its timers. A holder can make
+the site re-read a public feed a little sooner, and nothing else.
 
 Both live in the Vercel environment of both projects and nowhere in either
 repo; `lib/env.test.ts` allows exactly those two secret-shaped names and
@@ -142,6 +142,31 @@ their next request — so under normal operation a publish, a withdrawal or a
 new price shows within about a minute, the feed's own cache being the only
 wait left. A lost knock costs freshness, never correctness: the timers above
 still apply.
+
+A knock asks for one of three things (`lib/revalidate.ts` `readKnock`):
+`{ reference }` — the home page, the list and that listing, after a save, a
+photograph or a unit's status change; `{ scope: "listings" }` — the home
+page, the list and EVERY listing page, after the CRM's bulk reprice or
+unit-type stamp (since 2026-10-08), so no unit is named and the request does
+not grow with the number of units — and for a unit whose reference falls
+outside the path shape the door accepts; `{}` (or a null or empty
+reference) — the home page and the list. Any other body is refused with a
+400 and rebuilds nothing. A rebuilt page is
+EXPIRED, not merely stale: the next visitor waits for a fresh render
+(measured on a production build: `x-nextjs-cache: MISS`, then `HIT`). That
+is also why the door reads the feed once before marking anything (`lib/crm.ts`
+`feedAnswers`) and answers 503 when the feed is not answering — an expired
+listing page that cannot read the feed answers 500, where an untouched one
+keeps serving its last good copy; the change then shows when the timers
+next rebuild.
+
+What a knock does not reach, measured: a knock answers before Next has
+recorded the invalidation, so a visitor in that same instant may still get
+the old render; the CRM's edge can hand the fresh render a feed body up to
+`max-age=60` old (that cache is the CRM's, and was not measurable locally);
+and a `{ reference }` knock rebuilds only its own listing page — the
+"Other properties" cards on OTHER listing pages keep a sold unit or an old
+price until those pages' own timers, as before.
 
 ## Related
 

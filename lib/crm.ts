@@ -305,6 +305,73 @@ async function readAllPages(deadline: number): Promise<PagedRead> {
   }
 }
 
+/**
+ * Is the feed answering right now? The revalidate door asks BEFORE it marks
+ * anything stale (T-unit-site-revalidate), and rebuilds nothing when it is not.
+ *
+ * A knock EXPIRES a page: the next visitor waits for a fresh render instead of
+ * being handed the cached one. With the feed down that render throws, and a
+ * listing page answers 500 where, untouched, it would have kept serving its
+ * last good copy (see app/properties/[reference]/page.tsx). Measured
+ * 2026-10-08 on a production build: a knock that landed while the feed
+ * answered 503 turned a cached listing into a 500 for as long as the outage
+ * lasted — and a bulk knock does that to every listing page at once. Refusing
+ * the knock leaves the pages on their timers, which already keep the last good
+ * copy through an outage; the CRM logs the refusal and the change shows when
+ * the timers next rebuild.
+ *
+ * One read, never cached (`no-store` — a probe that reads the data cache
+ * proves nothing), checked against the contract as every read here is: the
+ * listing the knock names, or the first page of the book. It waits as long as
+ * any feed read here (FEED_TIMEOUT_MS — long enough for a cold CRM function),
+ * because a shorter wait would refuse knocks against a feed that is merely
+ * slow; the CRM waits ten seconds for the answer (gnk-crm
+ * lib/services/site-revalidate.ts). Read with the forward key like every other
+ * feed read, so without CRM_FORWARD_KEY a 429 refuses the knock as it would
+ * fail the render. It narrows the window rather than closing it — the feed can
+ * still fall over between this read and the renders that follow.
+ */
+export async function feedAnswers(reference: string | null): Promise<boolean> {
+  const query = reference ? `reference=${encodeURIComponent(reference)}` : "offset=0";
+  try {
+    const res = await fetch(`${CRM}/api/public/listings?org=${encodeURIComponent(ORG)}&${query}`, {
+      cache: "no-store",
+      headers: forwardHeaders(),
+      signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      report({
+        event: "crm.probe.bad-status",
+        level: "warning",
+        log: [`[crm] feed answered ${res.status} to the revalidate probe; nothing rebuilt`],
+        extra: { status: res.status },
+      });
+      return false;
+    }
+    const parsed = feedEnvelopeSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      const issues = feedIssueSummary(parsed.error);
+      report({
+        event: "crm.probe.bad-shape",
+        level: "warning",
+        // paths and codes only — never a value the payload carried
+        log: [`[crm] feed body failed the contract on the revalidate probe: ${issues}; nothing rebuilt`],
+        extra: { issues },
+      });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    report({
+      event: "crm.probe.unreachable",
+      level: "warning",
+      log: ["[crm] feed unreachable on the revalidate probe; nothing rebuilt:", err],
+      cause: err,
+    });
+    return false;
+  }
+}
+
 export type ListingResult = { ok: true; listing: Listing | null } | { ok: false };
 
 /**
