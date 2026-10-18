@@ -41,6 +41,10 @@ beforeEach(() => {
   vi.resetModules();
 });
 
+/* Every case imports the page cold (resetModules), and the first one under
+   a loaded machine took over vitest's 5 s default (review 2026-10-18). */
+vi.setConfig({ testTimeout: 20_000 });
+
 describe("the ways in", () => {
   it("routes a seller and an advisory client from the first screen, and a buyer from lg", async () => {
     const html = await home();
@@ -87,10 +91,14 @@ describe("the book", () => {
 
   it("closes with the off-list route — a brief and WhatsApp — beneath the results", async () => {
     const html = await home();
-    const after = html.slice(html.lastIndexOf("<article"));
-    expect(after).toContain("Not on the list?");
-    expect(after).toMatch(/<a href="\/properties#brief"[^>]*>Send us a brief/);
-    expect(after).toContain(`href="${site.contact.whatsappHref}"`);
+    // The block itself, not "everything after the last card": the people
+    // section further down carries its own WhatsApp link, and an unbounded
+    // slice let this pass with the off-list link removed (review 2026-10-18).
+    const block = /<div[^>]*>\s*<p[^>]*>Not on the list\?[\s\S]*?<\/div>/.exec(html);
+    expect(block, "the off-list block").not.toBeNull();
+    expect(html.indexOf("Not on the list?")).toBeGreaterThan(html.lastIndexOf("<article"));
+    expect(block![0]).toMatch(/<a href="\/properties#brief"[^>]*>Send us a brief/);
+    expect(block![0]).toContain(`href="${site.contact.whatsappHref}"`);
   });
 
   it("does not, on an empty book, where the empty state already invites the brief", async () => {

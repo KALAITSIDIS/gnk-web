@@ -65,8 +65,12 @@ const PAUSE_MS = 300;
 let root: Root;
 let container: HTMLDivElement;
 
-function mount(search = "", props: { briefOnPage?: boolean } = {}) {
-  window.history.replaceState(null, "", search ? `/properties?${search}` : "/properties");
+function mount(
+  search = "",
+  props: { briefOnPage?: boolean; offList?: boolean; feedDown?: boolean; listings?: Listing[] } = {},
+  hash = "",
+) {
+  window.history.replaceState(null, "", (search ? `/properties?${search}` : "/properties") + hash);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -296,5 +300,69 @@ describe("focus after a button that removes itself (review 2026-10-18)", () => {
     mount("type=villa&max=250000");
     act(() => container.querySelector<HTMLButtonElement>("div.text-center button")!.click());
     expect(document.activeElement?.getAttribute("href")).toBe("/properties/PAF0001");
+  });
+});
+
+describe("what the review of 2026-10-18 found untested", () => {
+  it("announces nothing about filters during a feed outage", () => {
+    // The page says the listings are unavailable; "no listings match" would
+    // blame the visitor's search for the firm's outage.
+    mount("beds=3", { feedDown: true, listings: [] });
+    expect(liveRegion().textContent).toBe("");
+    expect(container.textContent).toContain("Our listings are briefly unavailable.");
+  });
+
+  it("shows a bedroom count the bar does not offer in its select, as it does a ceiling", () => {
+    mount("q=zzz&beds=9");
+    expect(select("beds").value).toBe("9");
+  });
+
+  it("keeps the fragment when the debounced write lands, so a visitor at #brief stays there", () => {
+    mount("", {}, "#brief");
+    choose("type", "villa");
+    pause();
+    expect(window.location.search).toBe("?type=villa");
+    expect(window.location.hash).toBe("#brief");
+  });
+
+  it("from #brief itself, clears the fragment before the jump, so the jump is a real fragment change the form hears", () => {
+    /* jsdom does not follow a link, so this pins the half that is code: the
+       click writes the NEW search with NO fragment and lets the link's own
+       "#brief" proceed — which a browser then performs as a fragment change,
+       firing the hashchange the brief form listens for even when the visitor
+       was already at #brief. The browser half was measured in Chrome
+       (Playwright, 2026-10-18): the form filled and took focus. */
+    mount("type=land", { briefOnPage: true }, "#brief");
+    choose("max", "500000"); // the plot is €780,000: nothing matches; no pause, the write is pending
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      briefLink().dispatchEvent(click);
+    });
+    expect(click.defaultPrevented, "the link's own navigation goes ahead").toBe(false);
+    expect(briefLink().getAttribute("href")).toBe("#brief");
+    expect(window.location.search).toBe("?type=land&max=500000");
+    expect(window.location.hash).toBe("");
+  });
+
+  it("carries the search the page applied, not a type the book does not hold", () => {
+    mount("type=penthouse&max=500000", { offList: true });
+    expect(select("type").value).toBe("");
+    expect(briefLink().getAttribute("href")).toBe("/properties?max=500000#brief");
+  });
+
+  it("closes a filtered list on the home page with a brief that carries the search", () => {
+    mount("type=villa", { offList: true });
+    const link = [...container.querySelectorAll<HTMLAnchorElement>("a")].find((a) =>
+      a.textContent!.includes("Send us this brief"),
+    )!;
+    expect(cards()).toEqual(["PAF0001"]);
+    expect(link.getAttribute("href")).toBe("/properties?type=villa#brief");
+    expect(container.textContent).toContain("Not on the list?");
+  });
+
+  it("sizes the search box to leave no select alone on a row: the whole first row for four selects", () => {
+    // BOOK offers type, area, beds and price: four selects, an even number.
+    mount();
+    expect(searchBox().closest("label")!.className).toMatch(/\bsm:col-span-2\b/);
   });
 });

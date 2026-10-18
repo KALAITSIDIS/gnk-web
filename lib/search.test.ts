@@ -233,7 +233,13 @@ describe("the grid for a small book never strands one card", () => {
   /* From lg up only. Below it three columns would be 218 px wide at 768,
      narrower than the card's price and measurements, so a tablet keeps two
      columns and three cards there are two and one — the cost of a readable
-     card, accepted rather than hidden. */
+     card, accepted rather than hidden.
+
+     And for a SMALL book only — three to six, the sizes this rule exists for
+     ("a small set gets a layout built for its size"). From seven a lone card
+     on the last row of a long list is ordinary grid behaviour (seven lay out
+     3, 3, 1), not a short list floating in dead space; the claim stops where
+     the rule does (review 2026-10-18). */
   for (const n of [3, 4, 5, 6]) {
     it(`leaves no card alone under a fuller row for ${n} cards, from lg up`, () => {
       const [, , , lg, xl] = columnsAt(resultCols(n));

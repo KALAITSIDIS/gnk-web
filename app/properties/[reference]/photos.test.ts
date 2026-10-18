@@ -57,6 +57,21 @@ describe("the listing page's photographs", () => {
     expect(html).not.toMatch(/<img/);
   }, 20_000);
 
+  it("with photographs whose cover has no rendition, still draws the gallery and never says 'no photographs'", async () => {
+    // The feed contract allows null renditions (lib/feed-schema.ts). That
+    // listing HAS photographs: the gallery stays, its cover box plain, and
+    // the rest are drawn (review 2026-10-18).
+    const real = (feedRow().images as Record<string, unknown>[])[0]!;
+    fakeFeed({
+      ...feedRow({ reference: "PAF0001" }),
+      images: [{ ...real, thumb: null, card: null, full: null }, real, real, real, real],
+    });
+    const html = await render();
+    expect(html).not.toContain("No photographs yet");
+    expect(html).toMatch(/aspect-\[4\/3\]/);
+    expect(html).toMatch(/<img/);
+  }, 20_000);
+
   it("with photographs, draws the gallery as before and no 'no photographs' line", async () => {
     fakeFeed(feedRow({ reference: "PAF0001" }));
     const html = await render();

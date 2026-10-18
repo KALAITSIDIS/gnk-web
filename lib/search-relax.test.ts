@@ -76,6 +76,23 @@ describe("which filter to drop when nothing matches", () => {
     expect(keys(search({ type: "apartment", area: "Peyia / Coral Bay" }))).toEqual(["type", "area"]);
   });
 
+  it("puts the more productive filter first even when it comes later in chip order", () => {
+    // Chip order is q, type, area, beds, max. Here dropping the TYPE finds
+    // three listings in Peyia and dropping the TEXT finds two apartments, so
+    // the type comes first although its chip comes second (review
+    // 2026-10-18: no case ever separated count order from chip order).
+    const book = [
+      listing({ reference: "A", property_type: "apartment", area: { en: "Kato Paphos" }, asking_price: 285_000 }),
+      listing({ reference: "B", property_type: "apartment", area: { en: "Kato Paphos" }, asking_price: 300_000 }),
+      listing({ reference: "C", property_type: "land", asking_price: 780_000 }),
+      listing({ reference: "D", property_type: "villa", asking_price: 450_000 }),
+      listing({ reference: "E", property_type: "villa", asking_price: 520_000 }),
+    ];
+    const s = search({ q: "peyia", type: "apartment" });
+    expect(book.filter((l) => matchesSearch(l, s))).toEqual([]);
+    expect(relaxations(book, s).map((r) => r.key)).toEqual(["type", "q"]);
+  });
+
   it("keeps the chip order when two suggestions find the same number", () => {
     // Land + 2+ bedrooms: dropping the type finds the apartment and the
     // villa, dropping the bedrooms finds the plot — the type is first by

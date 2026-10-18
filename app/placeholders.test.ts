@@ -43,6 +43,9 @@ beforeEach(() => {
   book.listings = [];
 });
 
+// Cold page imports under load (see app/home.test.ts).
+vi.setConfig({ testTimeout: 20_000 });
+
 describe("with the principals still unnamed (lib/site.ts as it is)", () => {
   it("the home page draws no placeholder cards, and promises no names it does not show", async () => {
     const { default: HomePage } = await import("./page");
