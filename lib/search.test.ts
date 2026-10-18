@@ -8,6 +8,7 @@ import {
   matchesBedrooms,
   matchesMaxPrice,
   priceStepsFor,
+  resultCols,
   resultCountLabel,
   salePrice,
 } from "./search";
@@ -208,4 +209,37 @@ describe("a listing for sale or rent", () => {
   it("agrees with the card, which says both", () => {
     expect(priceLabel(both)).toBe("€450,000 · €1,500 / month");
   });
+});
+
+describe("the grid for a small book never strands one card", () => {
+  /* Measured 2026-10-18: the live book of three laid out two-and-one from
+     1024 to 1279 px, because three columns waited for xl. Columns are
+     counted per breakpoint from the class string, as Tailwind would apply
+     them; a row with one card under a fuller row is the shape ruled out. */
+  const BREAKPOINTS = ["", "sm", "md", "lg", "xl"] as const;
+  const columnsAt = (classes: string) => {
+    let cols = 1;
+    return BREAKPOINTS.map((bp) => {
+      const m = new RegExp(`(?:^|\\s)${bp ? `${bp}:` : ""}grid-cols-(\\d+)(?:\\s|$)`).exec(classes);
+      if (m) cols = Number(m[1]);
+      return cols;
+    });
+  };
+
+  it("lays three out in one row from lg", () => {
+    expect(columnsAt(resultCols(3))).toEqual([1, 2, 2, 3, 3]);
+  });
+
+  /* From lg up only. Below it three columns would be 218 px wide at 768,
+     narrower than the card's price and measurements, so a tablet keeps two
+     columns and three cards there are two and one — the cost of a readable
+     card, accepted rather than hidden. */
+  for (const n of [3, 4, 5, 6]) {
+    it(`leaves no card alone under a fuller row for ${n} cards, from lg up`, () => {
+      const [, , , lg, xl] = columnsAt(resultCols(n));
+      for (const cols of [lg!, xl!]) {
+        expect(n % cols, `${n} cards in ${cols} columns`).not.toBe(1);
+      }
+    });
+  }
 });

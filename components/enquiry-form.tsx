@@ -5,6 +5,7 @@ import Link from "next/link";
 import { site } from "@/lib/site";
 import { whatsappHref } from "@/lib/whatsapp";
 import { label } from "@/lib/format";
+import { briefFromSearch, parseSearchState } from "@/lib/search";
 import {
   AREAS,
   BUDGETS,
@@ -66,6 +67,12 @@ export function EnquiryForm({
      focused (measured 2026-09-13). With JavaScript the name field takes
      focus on that jump; without it the jump still lands. */
   focusOnHash,
+  /* The buyer's brief on /properties. Arrived at by "Send us this brief"
+     (focusOnHash "#brief"), the URL carries the search the visitor just
+     ran, and the brief starts from it — lib/search.ts briefFromSearch. Only
+     an EMPTY field is written: nothing the visitor has chosen or typed is
+     ever replaced, and a note says what was filled so it can be changed. */
+  briefFromSearchOnHash = false,
 }: {
   reference?: string;
   listingUrl?: string;
@@ -75,6 +82,7 @@ export function EnquiryForm({
   variant?: "buyer" | "seller" | "valuation";
   areas?: Record<string, string[]>;
   focusOnHash?: string;
+  briefFromSearchOnHash?: boolean;
 }) {
   const seller = variant === "seller";
   const buyer = variant === "buyer";
@@ -92,6 +100,8 @@ export function EnquiryForm({
      contact-detail rule) or beside the button (the send itself). */
   const [contactError, setContactError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fromSearch, setFromSearch] = useState<string[] | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const sentRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
@@ -148,6 +158,31 @@ export function EnquiryForm({
     window.addEventListener("hashchange", focusIfTargeted);
     return () => window.removeEventListener("hashchange", focusIfTargeted);
   }, [focusOnHash]);
+
+  useEffect(() => {
+    if (!briefFromSearchOnHash || !focusOnHash) return;
+    const fill = () => {
+      const form = formRef.current;
+      if (!form || window.location.hash !== focusOnHash) return;
+      const field = (name: string) =>
+        form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+      const areaSelect = field("buy_area");
+      const areaChoices =
+        areaSelect instanceof HTMLSelectElement ? [...areaSelect.options].map((o) => o.value).filter(Boolean) : [];
+      const brief = briefFromSearch(parseSearchState(new URLSearchParams(window.location.search)), areaChoices);
+      if (brief.summary.length === 0) return;
+      for (const [name, value] of Object.entries(brief.fields)) {
+        const el = field(name);
+        if (el && !el.value) el.value = value;
+      }
+      const message = field("message");
+      if (brief.message && message && !message.value.trim()) message.value = brief.message;
+      setFromSearch(brief.summary);
+    };
+    fill();
+    window.addEventListener("hashchange", fill);
+    return () => window.removeEventListener("hashchange", fill);
+  }, [briefFromSearchOnHash, focusOnHash]);
 
   /* An opener is appended, never substituted: a person who has typed
      something and then taps "Arrange a viewing" keeps what they wrote. */
@@ -264,6 +299,7 @@ export function EnquiryForm({
        lose the enquiry. The route accepts this encoding and answers with a
        plain page. */
     <form
+      ref={formRef}
       action="/api/enquiry"
       method="post"
       onSubmit={onSubmit}
@@ -278,6 +314,13 @@ export function EnquiryForm({
       {intro ? <p className="mt-2 text-sm text-ink-2">{intro}</p> : null}
       {reference ? (
         <p className="eyebrow mt-2">Regarding {reference}</p>
+      ) : null}
+      {/* role="status": focus has gone to the name field, so the note is
+          announced rather than left for a screen reader to find. */}
+      {fromSearch ? (
+        <p role="status" className="mt-3 border-l-2 border-accent pl-3 text-sm text-ink-2">
+          Started from your search: {fromSearch.join(" · ")}. Change anything that is not right.
+        </p>
       ) : null}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">

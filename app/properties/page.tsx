@@ -48,7 +48,7 @@ export default async function PropertiesPage() {
                 with no listing cards in their HTML (2026-09-13). The search
                 reads the URL after hydration; the server render is the whole
                 book. components/property-search.test.ts holds this. */}
-            <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} />
+            <PropertySearch listings={feed.ok ? feed.listings : []} feedDown={!feed.ok} briefOnPage />
       </div>
 
       {/* Below the results, not only inside the empty state. With a deliberately
@@ -86,16 +86,25 @@ export default async function PropertiesPage() {
               .
             </p>
           </div>
-          <EnquiryForm
-            variant="buyer"
-            /* The feed is already in hand, and it is the only public source of
-               the CRM's area names: a listing renamed in Settings, or filed
-               under a district the static list never had, is always pickable. */
-            areas={areasWithFeed(feed.ok ? feed.listings : [])}
-            heading="What are you looking for?"
-            intro="Rough answers are fine — this is a starting point for a conversation, not a search filter."
-            cta="Send brief"
-          />
+          {/* #brief: where "Send us this brief" lands, from the empty state
+              here or on the home page — the form itself, not the section, so
+              that on a phone the focused name field is on screen rather than
+              a screen of copy below it (measured 2026-10-18). The form fills
+              itself from the search in the URL when it is arrived at that way. */}
+          <div id="brief">
+            <EnquiryForm
+              variant="buyer"
+              /* The feed is already in hand, and it is the only public source of
+                 the CRM's area names: a listing renamed in Settings, or filed
+                 under a district the static list never had, is always pickable. */
+              areas={areasWithFeed(feed.ok ? feed.listings : [])}
+              focusOnHash="#brief"
+              briefFromSearchOnHash
+              heading="What are you looking for?"
+              intro="Rough answers are fine — this is a starting point for a conversation, not a search filter."
+              cta="Send brief"
+            />
+          </div>
         </div>
       </div>
     </div>

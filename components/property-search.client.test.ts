@@ -65,13 +65,13 @@ const PAUSE_MS = 300;
 let root: Root;
 let container: HTMLDivElement;
 
-function mount(search = "") {
+function mount(search = "", props: { briefOnPage?: boolean } = {}) {
   window.history.replaceState(null, "", search ? `/properties?${search}` : "/properties");
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(createElement(PropertySearch, { listings: BOOK }));
+    root.render(createElement(PropertySearch, { listings: BOOK, ...props }));
   });
 }
 
@@ -184,5 +184,95 @@ describe("the URL still leads when it is not the component's own write", () => {
 
     expect(select("type").value).toBe("land");
     expect(cards()).toEqual(["PAF0003"]);
+  });
+});
+
+/* ------------------------------------------------------------------------ *
+ * When nothing matches (2026-10-18).
+ *
+ * The empty state offered one way on — a link to /contact, a page with no
+ * brief on it — and said nothing about which choice had emptied the page.
+ * It now offers the filters whose removal alone would find something, as
+ * buttons the visitor presses; nothing is loosened for them. The count is
+ * announced from one live region that is always in the page. And the brief
+ * link carries the search with it.
+ * ------------------------------------------------------------------------ */
+const suggestionButtons = () =>
+  [...container.querySelectorAll<HTMLButtonElement>("div.text-center button")].map((b) => b.textContent!.replace("×", "").trim());
+const liveRegion = () => container.querySelector<HTMLElement>('[aria-live="polite"]')!;
+const briefLink = () =>
+  [...container.querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.getAttribute("href")!.endsWith("#brief"))!;
+
+describe("when nothing matches", () => {
+  it("offers the one filter whose removal finds something, and nothing else", () => {
+    // Villa + up to €250k: without the ceiling the villa is back; without
+    // the type, nothing in the book is that cheap either.
+    mount("type=villa&max=250000");
+    expect(cards()).toEqual([]);
+    expect(suggestionButtons()).toEqual(["Up to €250k"]);
+  });
+
+  it("removes that filter only when the visitor presses it, and keeps the other", () => {
+    mount("type=villa&max=250000");
+    act(() => {
+      container.querySelector<HTMLButtonElement>("div.text-center button")!.click();
+    });
+    expect(cards()).toEqual(["PAF0001"]);
+    expect(select("type").value).toBe("villa");
+    expect(select("max").value).toBe("");
+  });
+
+  it("offers clearing when no single change would help", () => {
+    mount("q=zzz&beds=9");
+    expect(cards()).toEqual([]);
+    expect(suggestionButtons()).toEqual(["Clear all filters"]);
+  });
+
+  it("shows a ceiling the bar does not offer in the select, instead of 'Any price' over an active filter", () => {
+    // The book's ladder is €500k and €750k; a shared link said €250k.
+    mount("max=250000");
+    expect(select("max").value).toBe("250000");
+    expect(select("max").selectedOptions[0]!.textContent).toBe("Up to €250k");
+  });
+});
+
+describe("the count is announced from one region that is always there", () => {
+  it("is present, and silent, before anything is filtered", () => {
+    mount();
+    expect(container.querySelectorAll('[aria-live="polite"]')).toHaveLength(1);
+    expect(liveRegion().textContent).toBe("");
+  });
+
+  it("says how many match, and says so when none do", () => {
+    mount();
+    const region = liveRegion();
+    choose("type", "villa");
+    expect(liveRegion()).toBe(region);
+    expect(region.textContent).toBe("1 listing matches");
+    choose("max", "500000");
+    choose("type", "land");
+    expect(region.textContent).toBe("No listings match these filters");
+  });
+});
+
+describe("the brief link carries the search", () => {
+  it("from another page, as the query of /properties#brief", () => {
+    mount("type=villa&max=250000");
+    expect(briefLink().getAttribute("href")).toBe("/properties?type=villa&max=250000#brief");
+    expect(briefLink().textContent).toBe("Send us this brief");
+  });
+
+  it("on /properties, as an in-page jump that writes the search to the URL first, even mid-debounce", () => {
+    mount("", { briefOnPage: true });
+    choose("type", "villa");
+    choose("max", "500000");
+    choose("area", "Kato Paphos");
+    // No pause: the debounced write has not landed yet.
+    expect(window.location.search).toBe("");
+    expect(briefLink().getAttribute("href")).toBe("#brief");
+    act(() => {
+      briefLink().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(window.location.search).toBe("?type=villa&area=Kato+Paphos&max=500000");
   });
 });

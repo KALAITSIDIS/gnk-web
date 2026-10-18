@@ -2,15 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Listing } from "@/lib/crm";
-import { label, moneyShort, placeLine, text, titleOf } from "@/lib/format";
+import { label, moneyShort } from "@/lib/format";
 import {
   activeFilters,
   areaOptionsFor,
   bedroomOptionsFor,
   DEFAULT_SEARCH,
-  matchesArea,
-  matchesBedrooms,
-  matchesMaxPrice,
+  matchesSearch,
+  relaxations,
   parseSearchState,
   priceStepsFor,
   resultCols,
@@ -64,6 +63,13 @@ import { PropertyCard } from "@/components/property-card";
  * one (audit 2026-09-13). A filter changes what is shown; a sort changes the
  * order of what is shown, so it sits with the results, in its own row above
  * the grid, with a visible label.
+ *
+ * WHEN NOTHING MATCHES (2026-10-18) the empty state names the filters whose
+ * removal ALONE would find something, as buttons — the visitor chooses; the
+ * search never widens itself. Beneath them, "Send us this brief" takes the
+ * search to the buyer's brief on /properties, which fills itself from it.
+ * The count is announced from one polite live region that is always in the
+ * page, so "none" is announced as well as "two".
  */
 const SORT_LABELS: Record<Sort, string> = {
   newest: "Newest first",
@@ -86,6 +92,10 @@ const readServerUrlSearch = () => "";
 /* A search string as the state would write it back: parsed (validated,
    trimmed) and re-serialised, so two spellings of one state compare equal. */
 const canonical = (search: string) => serializeSearchState(parseSearchState(new URLSearchParams(search)));
+/* An option list plus the value in force, when that value is a number the
+   list does not offer. parseSearchState has already checked its shape. */
+const withValue = (options: readonly number[], value: string): number[] =>
+  value && !options.includes(Number(value)) ? [...options, Number(value)].sort((a, b) => a - b) : [...options];
 
 /* The text input spans two tracks; every other control takes one. Five
    controls therefore need six tracks, four need five (live-ui-3, measured
@@ -104,9 +114,15 @@ export function PropertySearch({
    *  "our mandates are being prepared" during a CRM outage is a false
    *  public statement about the state of the firm. */
   feedDown = false,
+  /** The buyer's brief form is further down THIS page (/properties). Then
+   *  "send us a brief" is an in-page jump that keeps the URL's search, and
+   *  the form fills itself from it (components/enquiry-form.tsx). Elsewhere
+   *  the link carries the search to /properties#brief. */
+  briefOnPage = false,
 }: {
   listings: Listing[];
   feedDown?: boolean;
+  briefOnPage?: boolean;
 }) {
   /* NOT useSearchParams. On a prerendered page that hook makes Next render
      the nearest Suspense fallback into the HTML and the search on the client
@@ -161,12 +177,28 @@ export function PropertySearch({
       return;
     }
     const t = setTimeout(() => {
-      const path = window.location.pathname;
-      window.history.replaceState(null, "", next ? `${path}?${next}` : path);
+      // The fragment is kept: a visitor at /properties#brief who changes a
+      // filter is still at the brief.
+      const { pathname, hash } = window.location;
+      window.history.replaceState(null, "", `${pathname}${next ? `?${next}` : ""}${hash}`);
       setSeenUrl(canonical(next));
     }, URL_WRITE_DELAY_MS);
     return () => clearTimeout(t);
   }, [s]);
+
+  /* "Send us this brief", on the page that holds the brief form: write the
+     search to the URL NOW — the debounced write above may still be waiting —
+     and without a fragment, so that the link's own jump to #brief is a real
+     fragment navigation and fires the hashchange the form listens for, even
+     when the visitor was already at #brief. The form then reads the search
+     from the URL. Without JavaScript the link is a plain in-page jump. */
+  const writeSearchForBrief = () => {
+    const next = serializeSearchState(s);
+    window.history.replaceState(null, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+    setSeenUrl(canonical(next));
+  };
+  const briefQuery = serializeSearchState(s);
+  const briefHref = briefOnPage ? "#brief" : `/properties${briefQuery ? `?${briefQuery}` : ""}#brief`;
 
   const types = useMemo(
     () => [...new Set(listings.map((l) => l.property_type).filter(Boolean))].sort(),
@@ -199,30 +231,11 @@ export function PropertySearch({
     [s, types, areas],
   );
 
-  const results = useMemo(() => {
-    const needle = effective.q.trim().toLowerCase();
-    const filtered = listings.filter((l) => {
-      if (effective.type && l.property_type !== effective.type) return false;
-      if (!matchesArea(l, effective.area)) return false;
-      if (!matchesBedrooms(l, effective.beds)) return false;
-      if (!matchesMaxPrice(l, effective.max)) return false;
-      if (needle) {
-        const hay = [
-          titleOf(l),
-          placeLine(l),
-          text(l.district),
-          text(l.area),
-          l.reference,
-          text(l.short_description),
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
-      return true;
-    });
-    return sortListings(filtered, effective.sort);
-  }, [listings, effective]);
+  // lib/search.ts — one predicate, shared with the empty state's suggestions.
+  const results = useMemo(
+    () => sortListings(listings.filter((l) => matchesSearch(l, effective)), effective.sort),
+    [listings, effective],
+  );
 
   const chips = activeFilters(effective);
   const filtering = chips.length > 0;
@@ -241,6 +254,31 @@ export function PropertySearch({
     (bedOptions.length > 1 ? 1 : 0) +
     (priceSteps.length > 0 ? 1 : 0);
   const barCols = BAR_COLS[controls >= 4 ? controls + 1 : controls] ?? "";
+  /* Between sm and lg the bar is two columns. With an even number of
+     selects the search box takes the whole first row, so the selects pair
+     off; with an odd number it shares its row. Measured 2026-10-18 at 768:
+     the box and four selects left "Any price" alone on a third row. */
+  const selects = controls - 1;
+  const searchSpan = controls >= 4 ? (selects % 2 === 0 ? "sm:col-span-2" : "lg:col-span-2") : "";
+
+  /* When nothing matches: which ONE filter stands in the way (lib/search.ts
+     relaxations). Offered, never applied. */
+  const suggestions = useMemo(
+    () => (filtering && results.length === 0 ? relaxations(listings, effective) : []),
+    [filtering, results.length, listings, effective],
+  );
+
+  /* A bedroom count or a ceiling the bar does not offer — a link shared
+     before the book changed, or typed — still filters, and its chip says so.
+     The select has to say so too: it showed "Any price" over an active
+     "Up to €100k" chip and an empty page (measured 2026-10-18). So the
+     value in force joins the options rather than being dropped, which would
+     widen the search behind the visitor's back. */
+  const bedChoices = useMemo(
+    () => withValue(bedOptions, s.beds),
+    [bedOptions, s.beds],
+  );
+  const priceChoices = useMemo(() => withValue(priceSteps, s.max), [priceSteps, s.max]);
   /* 16 px on a phone: Safari zooms the page into any field set smaller when
      it is focused, and every field here was 14 (measured 2026-09-13). The
      width is added separately: a filter fills its grid track, the sort is
@@ -255,7 +293,7 @@ export function PropertySearch({
   return (
     <div>
       <div className={`grid gap-3 border border-line bg-surface p-4 ${barCols}`}>
-        <label className={controls >= 4 ? "lg:col-span-2" : ""}>
+        <label className={searchSpan}>
           <span className="sr-only">Search by area, town or reference</span>
           <input
             type="search"
@@ -324,7 +362,7 @@ export function PropertySearch({
               <span className="sr-only">Minimum bedrooms</span>
               <select name="beds" value={s.beds} onChange={(e) => set("beds", e.target.value)} className={field}>
                 <option value="">Any bedrooms</option>
-                {bedOptions.map((b) => (
+                {bedChoices.map((b) => (
                   <option key={b} value={b}>
                     {b}+ bedrooms
                   </option>
@@ -338,7 +376,7 @@ export function PropertySearch({
               <span className="sr-only">Maximum price</span>
               <select name="max" value={s.max} onChange={(e) => set("max", e.target.value)} className={field}>
                 <option value="">Any price</option>
-                {priceSteps.map((step) => (
+                {priceChoices.map((step) => (
                   <option key={step} value={step}>
                     Up to {moneyShort(step)}
                   </option>
@@ -349,12 +387,24 @@ export function PropertySearch({
         </div>
       </div>
 
+      {/* ONE live region, always in the page, so a change of count is
+          announced — including the change to none. It used to be the
+          visible count itself, mounted only while something matched: a
+          region inserted already filled is not reliably announced, and an
+          empty result announced nothing at all (2026-10-18). The visible
+          count stays, silent, beside the chips. */}
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {filtering
+          ? results.length > 0
+            ? resultCountLabel(results.length)
+            : "No listings match these filters"
+          : ""}
+      </p>
+
       {filtering ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" aria-label="Active filters">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Active filters">
           {results.length > 0 ? (
-            <p className="mr-1 text-ink-3 tabular-nums" aria-live="polite">
-              {resultCountLabel(results.length)}
-            </p>
+            <p className="mr-1 text-ink-3 tabular-nums">{resultCountLabel(results.length)}</p>
           ) : null}
           {chips.map((chip) => (
             <button
@@ -362,7 +412,7 @@ export function PropertySearch({
               type="button"
               onClick={() => set(chip.key, "" as never)}
               aria-label={`Remove filter: ${chip.label}`}
-              className="inline-flex min-h-9 items-center gap-1.5 border border-line-strong bg-surface px-2.5 py-1 text-ink-2 hover:border-accent hover:text-accent"
+              className="inline-flex min-h-11 items-center gap-1.5 border border-line-strong bg-surface px-3 text-ink-2 hover:border-accent hover:text-accent"
             >
               {chip.label}
               <span aria-hidden="true">×</span>
@@ -371,7 +421,7 @@ export function PropertySearch({
           <button
             type="button"
             onClick={() => setS({ ...DEFAULT_SEARCH, sort: s.sort })}
-            className="inline-flex min-h-9 items-center px-1 text-accent underline underline-offset-2 hover:text-accent-hover"
+            className="inline-flex min-h-11 items-center px-1 text-accent underline underline-offset-2 hover:text-accent-hover"
           >
             Clear all
           </button>
@@ -406,7 +456,7 @@ export function PropertySearch({
           ))}
         </div>
       ) : (
-        <div className="mt-8 border border-line bg-surface p-10 text-center">
+        <div className="mt-8 border border-line bg-surface px-5 py-10 text-center sm:px-10">
           <p className="font-display text-xl text-ink">
             {feedDown
               ? "Our listings are briefly unavailable."
@@ -414,18 +464,61 @@ export function PropertySearch({
                 ? "Nothing here matches that yet."
                 : "Our current mandates are being prepared."}
           </p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-ink-2">
+
+          {/* The way back to results, chosen by the visitor: each button
+              drops one filter, and only the filters whose removal finds
+              something are offered. When no single one would, clearing is
+              the honest offer. */}
+          {!feedDown && filtering ? (
+            suggestions.length > 0 ? (
+              <div className="mt-4">
+                <p className="text-sm text-ink-2">Removing one of these would show results:</p>
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  {suggestions.map((r) => (
+                    <button
+                      key={r.key}
+                      type="button"
+                      onClick={() => set(r.key, "" as never)}
+                      aria-label={`Remove filter: ${r.label}`}
+                      className="inline-flex min-h-11 items-center gap-1.5 border border-line-strong bg-surface px-3 text-sm text-ink hover:border-accent hover:text-accent"
+                    >
+                      {r.label}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <p className="text-sm text-ink-2">No single change would show results.</p>
+                <button
+                  type="button"
+                  onClick={() => setS({ ...DEFAULT_SEARCH, sort: s.sort })}
+                  className="mt-3 inline-flex min-h-11 items-center border border-line-strong bg-surface px-4 text-sm text-ink hover:border-accent hover:text-accent"
+                >
+                  Clear all filters
+                </button>
+              </div>
+            )
+          ) : null}
+
+          <p className="mx-auto mt-6 max-w-md text-sm text-ink-2">
             {feedDown
               ? "This is a problem at our end, not a reflection of what we have. Please try again shortly, or tell us what you are looking for and we will come back to you."
               : filtering
-                ? "We place a great deal off-market. Tell us what you are looking for and we will come back with what fits — including properties never listed publicly."
+                ? "Or tell us what you are looking for and we will come back with what fits — including properties that are not listed here."
                 : "Tell us what you are looking for and we will come back with what fits."}
           </p>
+          {/* To the buyer's brief, carrying the search: the brief form
+              fills its type, area and bedrooms from it. It went to /contact,
+              a page with no brief on it, while the brief form sat 760 px
+              below on /properties itself (audit 2026-09-15, F6). */}
           <a
-            href="/contact"
-            className="mt-5 inline-block bg-accent px-5 py-3 text-sm font-medium text-white hover:bg-accent-hover"
+            href={briefHref}
+            onClick={briefOnPage ? writeSearchForBrief : undefined}
+            className="mt-4 inline-block bg-accent px-5 py-3 text-sm font-medium text-white hover:bg-accent-hover"
           >
-            Tell us what you need
+            {filtering && !feedDown ? "Send us this brief" : "Tell us what you need"}
           </a>
         </div>
       )}

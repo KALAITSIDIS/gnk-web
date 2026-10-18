@@ -248,3 +248,73 @@ describe("what does not change", () => {
     expect(key![0]).not.toMatch(/value="[^"]+"/);
   });
 });
+
+/* ------------------------------------------------------------------------ *
+ * The buyer's brief, started from the search (2026-10-18).
+ *
+ * "Send us this brief" lands at /properties#brief with the search in the
+ * URL. The brief fills the fields that mean the same thing — type, area,
+ * minimum bedrooms — writes a price ceiling and any typed words into the
+ * message in the buyer's own terms (a ceiling does not say which budget
+ * band below it is meant), and says what it filled. It never replaces
+ * anything the visitor has already chosen or typed.
+ * ------------------------------------------------------------------------ */
+describe("the buyer's brief, arrived at from a search", () => {
+  const AREAS = { Paphos: ["Kato Paphos", "Peyia / Coral Bay"] };
+  const brief = () =>
+    mount({ variant: "buyer", areas: AREAS, focusOnHash: "#brief", briefFromSearchOnHash: true });
+  const value = (c: HTMLElement, name: string) =>
+    (c.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
+
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("fills the fields of the same meaning, and puts the ceiling and the words in the message", () => {
+    window.history.replaceState(null, "", "/properties?q=pool&type=villa&area=peyia+%2F+coral+bay&beds=3&max=500000#brief");
+    const c = brief();
+    expect(value(c, "buy_property_type")).toBe("villa");
+    expect(value(c, "buy_area")).toBe("Peyia / Coral Bay");
+    expect(value(c, "bedrooms_min")).toBe("3");
+    expect(value(c, "budget")).toBe("");
+    expect(value(c, "message")).toBe("From my search on the site: up to €500k, “pool”.");
+    const note = c.querySelector('[role="status"]')!;
+    expect(note.textContent).toContain("Villa · Peyia / Coral Bay · 3+ bedrooms · Up to €500k · “pool”");
+  });
+
+  it("does nothing when the page was not arrived at as the brief", () => {
+    window.history.replaceState(null, "", "/properties?type=villa");
+    const c = brief();
+    expect(value(c, "buy_property_type")).toBe("");
+    expect(c.querySelector('[role="status"]')).toBeNull();
+  });
+
+  it("never replaces what the visitor already chose or typed", () => {
+    window.history.replaceState(null, "", "/properties?type=villa");
+    const c = brief();
+    const type = c.querySelector<HTMLSelectElement>('[name="buy_property_type"]')!;
+    const message = c.querySelector<HTMLTextAreaElement>('[name="message"]')!;
+    type.value = "apartment";
+    message.value = "Sea view, please.";
+    act(() => {
+      window.history.replaceState(null, "", "/properties?type=villa&max=500000#brief");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(type.value).toBe("apartment");
+    expect(message.value).toBe("Sea view, please.");
+  });
+
+  it("keeps what it filled through the re-render its own note causes", () => {
+    window.history.replaceState(null, "", "/properties?type=land#brief");
+    const c = brief();
+    expect(c.querySelector('[role="status"]')).not.toBeNull();
+    expect(value(c, "buy_property_type")).toBe("land");
+  });
+
+  it("ignores an area the form does not offer rather than inventing one", () => {
+    window.history.replaceState(null, "", "/properties?area=Limassol#brief");
+    const c = brief();
+    expect(value(c, "buy_area")).toBe("");
+    expect(c.querySelector('[role="status"]')).toBeNull();
+  });
+});
