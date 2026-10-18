@@ -34,6 +34,17 @@ export const site = {
   positioning:
     "Disciplined analysis, clear decision-making and hands-on execution across Cyprus real estate.",
 
+  /**
+   * What a valuation costs and commits the owner to, in ONE place: the
+   * valuation page states it, and the home page's selling band repeats it
+   * beside its button. Two sentences, never one: "cost nothing" alone, next
+   * to "Request a valuation", reads as a free written valuation — which the
+   * firm has not offered (the design review of 2026-10-18 caught a draft of
+   * the home page doing exactly that). Change the terms here or nowhere.
+   */
+  valuationTerms:
+    "The first conversation and an indicative view cost nothing and commit you to nothing. If you want the full written valuation with comparables, we will tell you the fee before we start.",
+
   contact: {
     email: "info@kalaitsidis.com",
     phone: "+357 94 000015",

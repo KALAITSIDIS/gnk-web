@@ -6,6 +6,7 @@ import {
   coverImage,
   deedLabel,
   isContainer,
+  kindOf,
   label,
   placeLine,
   priceLabel,
@@ -39,6 +40,19 @@ import {
  * name so a screen reader hears what the figure is for. The row at the
  * bottom is the visible affordance; the reference stays there for the
  * person who phones and reads it out. components/property-card.test.ts.
+ *
+ * WITH NO PHOTOGRAPH, A PLATE (2026-10-18). Every published listing has had
+ * none since September, so three grey boxes reading "Photography to follow"
+ * were the largest thing on the home page — and "to follow" is the promise
+ * app/placeholders.test.ts forbids a page to make (it passed only because
+ * that test feeds an empty book). The box is now set like the title page of
+ * a set of particulars: what it is and where, in the display face, and then,
+ * plainly, "No photographs yet". It is the same box the photograph will fill,
+ * so nothing moves the day one arrives. Type and place are hidden from a
+ * screen reader, which hears them in the price link; it hears the one fact
+ * the plate adds. The frame is 3:2 — the shape of most property photography —
+ * rather than 4:3: 29 px less on a phone, which is what puts the first price
+ * on the first screen at 390 x 844.
  */
 export function PropertyCard({ listing, priority = false }: { listing: Listing; priority?: boolean }) {
   const cover = coverImage(listing);
@@ -51,6 +65,7 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
      change, and the one class of bug this project keeps producing is one fact
      living in two places. */
   const isProject = isContainer(listing);
+  const where = text(listing.area) || text(listing.district);
 
   /* One function decides the line of measurements by what the thing IS: a
      plot shows its plot area (the card used to drop PAF0003's 980 m² and show
@@ -61,23 +76,31 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
 
   return (
     <article className="group relative flex flex-col overflow-hidden border border-line bg-surface transition-colors hover:border-accent focus-within:border-accent">
-      <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
+      <div className="relative aspect-[3/2] overflow-hidden bg-surface-2">
         {cover?.card ? (
           <Image
             src={cover.card}
             alt={text(cover.alt) || titleOf(listing)}
             fill
             priority={priority}
-            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+            sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
             className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
-          <span className="placeholder absolute inset-0 flex items-center justify-center text-sm">
-            Photography to follow
-          </span>
+          <div className="placeholder absolute inset-0 flex flex-col justify-end p-5">
+            <div aria-hidden="true">
+              <p className="font-display text-3xl leading-none font-medium text-ink lg:text-2xl xl:text-3xl">
+                {kindOf(listing)}
+              </p>
+              {where ? <p className="mt-2 text-sm text-ink-2">{where}</p> : null}
+            </div>
+            <p className="mt-4 border-t border-line-2 pt-3 text-sm text-ink-2">No photographs yet</p>
+          </div>
         )}
 
-        {isProject ? (
+        {/* With no photograph the plate already names a development
+            ("Villa development"); the badge is for the photograph. */}
+        {isProject && cover?.card ? (
           <span className="absolute top-3 left-3 bg-ink/85 px-2.5 py-1 text-xs font-medium tracking-wide text-white uppercase">
             Development
           </span>

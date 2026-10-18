@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { feedRow } from "@/lib/feed-fixtures";
 
 /**
  * No page publishes a placeholder as content.
@@ -26,23 +27,44 @@ vi.mock("next/link", () => ({
 vi.mock("next/image", () => ({
   default: (props: { src: string; alt: string }) => createElement("img", { src: props.src, alt: props.alt }),
 }));
+/* The book the home page is rendered with. Empty by default — and that
+   default is how "Photography to follow" sat on every live card while this
+   file passed: with no listing there is no card to carry it (2026-10-18).
+   The book as published (three listings, no photograph) is tested below. */
+const book = vi.hoisted(() => ({ listings: [] as unknown[] }));
 vi.mock("@/lib/crm", () => ({
-  getListings: async () => ({ ok: true, listings: [] }),
+  getListings: async () => ({ ok: true, listings: book.listings }),
 }));
 
 const PLACEHOLDER = /to follow/i;
 
 beforeEach(() => {
   vi.resetModules();
+  book.listings = [];
 });
 
 describe("with the principals still unnamed (lib/site.ts as it is)", () => {
-  it("the home page draws no placeholder cards", async () => {
+  it("the home page draws no placeholder cards, and promises no names it does not show", async () => {
     const { default: HomePage } = await import("./page");
     const html = renderToStaticMarkup(await HomePage());
     expect(html).not.toMatch(PLACEHOLDER);
-    expect(html).toContain("Two names, on every mandate.");
+    // "Two names, on every mandate." stood over no names at all (measured
+    // live 2026-10-18): a heading's promise is a placeholder too.
+    expect(html).not.toMatch(/two names/i);
+    expect(html).toContain("The person who values a property negotiates it.");
     expect(html).toContain("More about the firm");
+  });
+
+  it("the home page with the book as published — three listings, no photograph — says so plainly", async () => {
+    book.listings = (["PAF0004", "PAF0003", "PAF0001"] as const).map((reference) => ({
+      ...feedRow({ reference }),
+      images: [],
+    }));
+    const { default: HomePage } = await import("./page");
+    const html = renderToStaticMarkup(await HomePage());
+    expect(html).not.toMatch(PLACEHOLDER);
+    expect(html.match(/No photographs yet/g)).toHaveLength(3);
+    expect(html).not.toMatch(/<img/);
   });
 
   it("the about page says the section is being completed, and draws no cards", async () => {

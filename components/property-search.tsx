@@ -22,6 +22,7 @@ import {
   type Sort,
 } from "@/lib/search";
 import { PropertyCard } from "@/components/property-card";
+import { site } from "@/lib/site";
 
 /**
  * Search over the whole published portfolio, held in memory.
@@ -119,10 +120,16 @@ export function PropertySearch({
    *  the form fills itself from it (components/enquiry-form.tsx). Elsewhere
    *  the link carries the search to /properties#brief. */
   briefOnPage = false,
+  /** Close the list with the off-list route: "not on the list?", a brief
+   *  carrying the search, and WhatsApp. For the home page, where the brief
+   *  form is a page away; /properties has its own brief block below. Drawn
+   *  only beneath results — an empty result has its own invitation. */
+  offList = false,
 }: {
   listings: Listing[];
   feedDown?: boolean;
   briefOnPage?: boolean;
+  offList?: boolean;
 }) {
   /* NOT useSearchParams. On a prerendered page that hook makes Next render
      the nearest Suspense fallback into the HTML and the search on the client
@@ -522,6 +529,33 @@ export function PropertySearch({
           </a>
         </div>
       )}
+
+      {offList && results.length > 0 ? (
+        <div className="mt-10 flex flex-wrap items-center justify-between gap-x-8 gap-y-2 border-t border-line pt-6">
+          <p className="max-w-2xl text-ink-2">
+            Not on the list? Tell us what you are looking for, and one of us will reply
+            personally.
+          </p>
+          <p className="flex flex-wrap items-center gap-x-6">
+            <a
+              href={briefHref}
+              onClick={briefOnPage ? writeSearchForBrief : undefined}
+              className="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:text-accent-hover"
+            >
+              {filtering ? "Send us this brief" : "Send us a brief"}
+              <span aria-hidden="true"> →</span>
+            </a>
+            <a
+              href={site.contact.whatsappHref}
+              rel="noopener noreferrer"
+              target="_blank"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:text-accent-hover"
+            >
+              Message us on WhatsApp
+            </a>
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

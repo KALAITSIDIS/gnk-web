@@ -6,8 +6,11 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   ...pageMeta("/about"),
   title: "About",
+  // Not "Two principals, named, on every mandate" (2026-10-18): lib/site.ts
+  // names nobody yet, and this line is what a search result and a shared link
+  // show — ahead of a page that, correctly, draws no name.
   description:
-    "An independent real estate advisory practice in Paphos. Two principals, named, on every mandate.",
+    "An independent real estate advisory practice in Paphos, run by its two principals.",
 };
 
 /**

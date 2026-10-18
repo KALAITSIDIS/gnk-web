@@ -2,12 +2,16 @@ import type { Metadata } from "next";
 import { pageMeta } from "@/lib/site-url";
 import Link from "next/link";
 import { EnquiryForm } from "@/components/enquiry-form";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   ...pageMeta("/valuation"),
   title: "What is your property worth",
+  // Not "from a named adviser" (2026-10-18): no adviser is named anywhere on
+  // the site yet, and this sentence goes out in search results and every
+  // shared link, where nobody can see that it is ahead of the page.
   description:
-    "A written pricing view on your Cyprus property, with real comparables and a defensible range — from a named adviser, not an automated estimate.",
+    "A written pricing view on your Cyprus property, with real comparables and a defensible range, from the person who would negotiate the sale.",
 };
 
 /**
@@ -54,11 +58,7 @@ export default function ValuationPage() {
 
           <section className="mt-10 border border-line bg-surface p-6">
             <h2 className="text-xl">What it costs, and what it commits you to</h2>
-            <p className="mt-2 text-ink-2">
-              The first conversation and an indicative view cost nothing and commit you to
-              nothing. If you want the full written valuation with comparables, we will tell
-              you the fee before we start.
-            </p>
+            <p className="mt-2 text-ink-2">{site.valuationTerms}</p>
             <p className="mt-3 text-sm text-ink-2">
               If you are past the number and weighing up who to instruct,{" "}
               <Link href="/selling" className="text-accent underline">
