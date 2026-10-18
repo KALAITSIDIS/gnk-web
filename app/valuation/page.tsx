@@ -26,9 +26,13 @@ export default function ValuationPage() {
         <div>
           <p className="eyebrow">Valuation</p>
           <h1 className="mt-2 text-4xl">What is your property actually worth?</h1>
+          {/* Said as what the owner gets, not as what others do wrong
+              (2026-10-18: this opened by criticising portals' algorithms and
+              agents). Every clause is one of the four items listed below. */}
           <p className="mt-5 text-lg text-ink-2">
-            Not what a portal&apos;s algorithm guesses, and not what an agent tells you to win
-            the instruction. A written view you can act on, or argue with.
+            A written view of what your property should sell for, the comparables behind it,
+            and the person who wrote it to talk it through. Something you can act on, or
+            argue with.
           </p>
 
           <section className="mt-10">
@@ -70,7 +74,13 @@ export default function ValuationPage() {
           </section>
         </div>
 
-        <div className="lg:sticky lg:top-8">
+        {/* lg:top-20 clears the 61 px sticky header, as the listing page's
+            enquiry column does. top-8 (32 px) would have slid the form's
+            first 29 px beneath it. Measured 2026-10-18 the column never
+            actually stuck — the form is the taller of the two columns, so it
+            has no room to travel — but the day the left column grows, it
+            would; components/site-header.test.ts holds both pages to this. */}
+        <div className="lg:sticky lg:top-20">
           <EnquiryForm
             variant="valuation"
             heading="Request a valuation"

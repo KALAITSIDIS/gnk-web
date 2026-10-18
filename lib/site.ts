@@ -175,13 +175,18 @@ export const ENQUIRY_RETENTION_MONTHS = 24;
    header and the phone menu set them heavier; the footer lists everything
    alike. One flag here, so the two navs cannot disagree (audit 2026-09-13:
    six equal items, no primary). */
+/* `cta` is a label for the ONE item the desktop header draws as a button
+   rather than a word: the seller's way in. A buyer's way in, Properties, is
+   the first word of the row and the search on the home page; a seller had
+   only a word set in medium weight among five others (2026-10-18). The phone
+   menu and the footer list it by `label` like everything else. */
 export const nav = [
-  { href: "/properties", label: "Properties", primary: true },
+  { href: "/properties", label: "Properties", primary: true, cta: null },
   // An owner deciding who to instruct had no route in: every other item here
   // addresses a buyer. Mandates are the revenue.
-  { href: "/selling", label: "Selling", primary: false },
-  { href: "/services", label: "Advisory", primary: false },
-  { href: "/valuation", label: "Valuation", primary: true },
-  { href: "/about", label: "About", primary: false },
-  { href: "/contact", label: "Contact", primary: false },
+  { href: "/selling", label: "Selling", primary: false, cta: null },
+  { href: "/services", label: "Advisory", primary: false, cta: null },
+  { href: "/valuation", label: "Valuation", primary: true, cta: "Request a valuation" },
+  { href: "/about", label: "About", primary: false, cta: null },
+  { href: "/contact", label: "Contact", primary: false, cta: null },
 ] as const;
