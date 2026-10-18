@@ -153,7 +153,7 @@ export const site = {
       // Null, not a TODO string: a placeholder that is truthy renders, and both
       // of these were being served to the public as the principals' names and
       // as <h3> headings in the About page's document outline. Null lets the
-      // pages say "to follow" the way they already do for bio and photograph.
+      // pages draw nothing for them (app/placeholders.test.ts).
       name: null as string | null,
       role: null as string | null,
       bio: null as string | null,

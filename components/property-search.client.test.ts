@@ -276,3 +276,25 @@ describe("the brief link carries the search", () => {
     expect(window.location.search).toBe("?type=villa&area=Kato+Paphos&max=500000");
   });
 });
+
+describe("focus after a button that removes itself (review 2026-10-18)", () => {
+  /* Each of these buttons disappears with the filter it removes. Focus used
+     to fall to <body>, returning a keyboard user to the top of the page. */
+  const chipButtons = () =>
+    [...container.querySelectorAll<HTMLButtonElement>('[aria-label="Active filters"] button')];
+
+  it("moves to the next chip, and to the search box when the last one goes", () => {
+    mount("type=villa&area=Peyia+%2F+Coral+Bay");
+    act(() => chipButtons()[0]!.click());
+    expect(document.activeElement).toBe(chipButtons()[0]);
+    expect(document.activeElement!.textContent).toContain("Peyia / Coral Bay");
+    act(() => chipButtons()[0]!.click());
+    expect(document.activeElement).toBe(searchBox());
+  });
+
+  it("moves to the first result after a suggestion in the empty state", () => {
+    mount("type=villa&max=250000");
+    act(() => container.querySelector<HTMLButtonElement>("div.text-center button")!.click());
+    expect(document.activeElement?.getAttribute("href")).toBe("/properties/PAF0001");
+  });
+});

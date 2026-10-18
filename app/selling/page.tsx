@@ -67,10 +67,9 @@ export default function SellingPage() {
           <p className="eyebrow">For owners</p>
           <h1 className="mt-2 text-4xl">Selling, without being told what you want to hear.</h1>
           <p className="mt-5 text-lg text-ink-2">
-            Most agents win an instruction by quoting the highest number. The property then
-            sits, the price comes down twice, and it sells for less than a realistic figure
-            would have achieved in half the time. We would rather have the difficult
-            conversation at the start.
+            A price set to win the instruction tends to sit: it comes down twice, and the
+            property sells for less than a realistic figure would have achieved in half the
+            time. We would rather have the difficult conversation at the start.
           </p>
 
           <section className="mt-10">
@@ -123,7 +122,9 @@ export default function SellingPage() {
           </section>
         </div>
 
-        <div className="lg:sticky lg:top-8">
+        {/* lg:top-20 clears the 61 px sticky header, as on the listing and
+            valuation pages; top-8 slid the form's first 29 px beneath it. */}
+        <div className="lg:sticky lg:top-20">
           <EnquiryForm
             variant="seller"
             heading="Tell us about your property"

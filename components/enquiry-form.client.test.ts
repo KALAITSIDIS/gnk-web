@@ -263,6 +263,9 @@ describe("the buyer's brief, arrived at from a search", () => {
   const AREAS = { Paphos: ["Kato Paphos", "Peyia / Coral Bay"] };
   const brief = () =>
     mount({ variant: "buyer", areas: AREAS, focusOnHash: "#brief", briefFromSearchOnHash: true });
+  /* The note's region is in the page from the first render, empty, and the
+     note is written into it — so "no note" is an empty region, not none. */
+  const status = (c: HTMLElement) => c.querySelector('[role="status"]')!;
   const value = (c: HTMLElement, name: string) =>
     (c.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
 
@@ -278,15 +281,21 @@ describe("the buyer's brief, arrived at from a search", () => {
     expect(value(c, "bedrooms_min")).toBe("3");
     expect(value(c, "budget")).toBe("");
     expect(value(c, "message")).toBe("From my search on the site: up to €500k, “pool”.");
-    const note = c.querySelector('[role="status"]')!;
-    expect(note.textContent).toContain("Villa · Peyia / Coral Bay · 3+ bedrooms · Up to €500k · “pool”");
+    expect(status(c).textContent).toContain("Villa · Peyia / Coral Bay · 3+ bedrooms · Up to €500k · “pool”");
   });
 
   it("does nothing when the page was not arrived at as the brief", () => {
     window.history.replaceState(null, "", "/properties?type=villa");
     const c = brief();
     expect(value(c, "buy_property_type")).toBe("");
-    expect(c.querySelector('[role="status"]')).toBeNull();
+    expect(status(c).textContent).toBe("");
+  });
+
+  it("has the note's live region in the page, empty, before anything fills it", () => {
+    window.history.replaceState(null, "", "/properties");
+    const c = brief();
+    expect(c.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(status(c).textContent).toBe("");
   });
 
   it("never replaces what the visitor already chose or typed", () => {
@@ -302,19 +311,84 @@ describe("the buyer's brief, arrived at from a search", () => {
     });
     expect(type.value).toBe("apartment");
     expect(message.value).toBe("Sea view, please.");
+    // and says nothing it did not do: neither "Villa" nor the ceiling went in
+    expect(status(c).textContent).toBe("");
+  });
+
+  it("names only what it wrote when some fields were already chosen", () => {
+    window.history.replaceState(null, "", "/properties");
+    const c = brief();
+    c.querySelector<HTMLSelectElement>('[name="buy_property_type"]')!.value = "apartment";
+    act(() => {
+      window.history.replaceState(null, "", "/properties?type=villa&beds=3#brief");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(value(c, "buy_property_type")).toBe("apartment");
+    expect(value(c, "bedrooms_min")).toBe("3");
+    expect(status(c).textContent).toContain("Started from your search: 3+ bedrooms.");
+    expect(status(c).textContent).not.toContain("Villa");
   });
 
   it("keeps what it filled through the re-render its own note causes", () => {
     window.history.replaceState(null, "", "/properties?type=land#brief");
     const c = brief();
-    expect(c.querySelector('[role="status"]')).not.toBeNull();
+    expect(status(c).textContent).toContain("Land");
     expect(value(c, "buy_property_type")).toBe("land");
   });
 
-  it("ignores an area the form does not offer rather than inventing one", () => {
+  it("puts an area the picker does not offer into the message, rather than picking something else", () => {
     window.history.replaceState(null, "", "/properties?area=Limassol#brief");
     const c = brief();
     expect(value(c, "buy_area")).toBe("");
-    expect(c.querySelector('[role="status"]')).toBeNull();
+    expect(value(c, "message")).toBe("From my search on the site: in Limassol.");
+    expect(status(c).textContent).toContain("Started from your search: Limassol.");
+  });
+
+  it("replaces what an earlier search wrote, but never what the visitor chose", () => {
+    window.history.replaceState(null, "", "/properties?type=villa&beds=3#brief");
+    const c = brief();
+    expect(value(c, "buy_property_type")).toBe("villa");
+    c.querySelector<HTMLInputElement>('[name="bedrooms_min"]')!.value = "4"; // the visitor's own
+    act(() => {
+      window.history.replaceState(null, "", "/properties?type=land#brief-again");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      window.history.replaceState(null, "", "/properties?type=land#brief");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(value(c, "buy_property_type")).toBe("land");
+    expect(value(c, "bedrooms_min")).toBe("4");
+    expect(status(c).textContent).toContain("Started from your search: Land.");
+    expect(status(c).textContent).not.toContain("Villa");
+  });
+});
+
+describe("a second brief after one was sent", () => {
+  /* Review 2026-10-18: after a sent brief, "Send us this brief" for a new
+     search jumped to the old "Thank you — that has reached us." — telling
+     the visitor a search had been sent that never was. A new arrival at the
+     brief starts a fresh form, from the new search, under a NEW key: it is a
+     second enquiry, not a retry of the first. */
+  it("starts a fresh form from the new search, with a new key", async () => {
+    const f = spyFetch().mockResolvedValue(reply(202, { ok: true }));
+    window.history.replaceState(null, "", "/properties?type=villa#brief");
+    const c = mount({ variant: "buyer", areas: { Paphos: ["Kato Paphos"] }, focusOnHash: "#brief", briefFromSearchOnHash: true });
+    const first = keyInput(c).value;
+    fillIn(c);
+    await press(c);
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(c.textContent).toContain("Thank you");
+
+    act(() => {
+      window.history.replaceState(null, "", "/properties?type=land");
+      window.history.replaceState(null, "", "/properties?type=land#brief");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+
+    expect(c.textContent).not.toContain("Thank you");
+    expect(q<HTMLSelectElement>(c, '[name="buy_property_type"]').value).toBe("land");
+    expect(keyInput(c).value).toMatch(KEY_SHAPE);
+    expect(keyInput(c).value).not.toBe(first);
+    expect(document.activeElement?.getAttribute("name")).toBe("name");
+    window.history.replaceState(null, "", "/");
   });
 });

@@ -145,6 +145,21 @@ export function resultCols(n: number): string {
 }
 
 /**
+ * The `sizes` a card's photograph is fetched at, for the grid resultCols
+ * draws for N cards — beside it so the two cannot disagree. The card used to
+ * carry one string written for a three-column grid, so a single result in its
+ * 32rem column asked for a third of the screen, and two results for a third
+ * where they get half (review 2026-10-18). The page is capped at max-w-7xl,
+ * so beyond 1280 the vw figures over-ask a little; never under.
+ */
+export function resultSizes(n: number): string {
+  if (n === 1) return "(max-width: 767px) 100vw, 32rem";
+  if (n === 2) return "(max-width: 639px) 100vw, 50vw";
+  if (n === 4) return "(max-width: 639px) 100vw, (max-width: 1279px) 50vw, 25vw";
+  return "(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw";
+}
+
+/**
  * What the chip row says while a filter is on: "2 listings match".
  *
  * Only while filtering. The unfiltered book carries no count on purpose —
@@ -315,41 +330,48 @@ export function relaxations(
  * minimum bedrooms. A price ceiling has NO such field: the brief asks for a
  * budget band, and "up to €500k" does not say which band below it the buyer
  * means, so it is written into the message in the buyer's own terms, with
- * any typed words, rather than guessed into a band. `summary` is what the
- * form tells the visitor it filled in. The form only ever writes into a
- * field that is still empty.
+ * any typed words, rather than guessed into a band. Each part carries the
+ * words the form uses to tell the visitor what it filled — and the form says
+ * only what it actually wrote: it writes into a field only while that field
+ * is still empty, so a criterion it skipped is not named (review
+ * 2026-10-18: the note said "Villa" over a field the visitor had set to
+ * Apartment).
  */
+export type BriefField = "buy_property_type" | "buy_area" | "bedrooms_min";
+
 export function briefFromSearch(
   s: SearchState,
   areaChoices: readonly string[],
 ): {
-  fields: Partial<Record<"buy_property_type" | "buy_area" | "bedrooms_min", string>>;
-  message: string | null;
-  summary: string[];
+  fields: Array<{ name: BriefField; value: string; label: string }>;
+  message: { text: string; labels: string[] } | null;
 } {
-  const fields: Partial<Record<"buy_property_type" | "buy_area" | "bedrooms_min", string>> = {};
-  const summary: string[] = [];
+  const fields: Array<{ name: BriefField; value: string; label: string }> = [];
   if (s.type && (PROPERTY_TYPES as readonly string[]).includes(s.type)) {
-    fields.buy_property_type = s.type;
-    summary.push(label(s.type));
+    fields.push({ name: "buy_property_type", value: s.type, label: label(s.type) });
   }
   const area = s.area ? areaChoices.find((a) => a.toLowerCase() === s.area.toLowerCase()) : undefined;
-  if (area) {
-    fields.buy_area = area;
-    summary.push(area);
-  }
-  if (s.beds) {
-    fields.bedrooms_min = s.beds;
-    summary.push(`${s.beds}+ bedrooms`);
-  }
+  if (area) fields.push({ name: "buy_area", value: area, label: area });
+  if (s.beds) fields.push({ name: "bedrooms_min", value: s.beds, label: `${s.beds}+ bedrooms` });
   const said: string[] = [];
+  const labels: string[] = [];
+  /* An area the search offered but the brief's picker does not list (the
+     picker needs a district beside the area; the search does not) goes into
+     the message rather than being dropped. */
+  if (s.area && !area) {
+    said.push(`in ${s.area}`);
+    labels.push(s.area);
+  }
   if (s.max) {
     said.push(`up to ${moneyShort(Number(s.max))}`);
-    summary.push(`Up to ${moneyShort(Number(s.max))}`);
+    labels.push(`Up to ${moneyShort(Number(s.max))}`);
   }
   if (s.q) {
     said.push(`“${s.q}”`);
-    summary.push(`“${s.q}”`);
+    labels.push(`“${s.q}”`);
   }
-  return { fields, message: said.length ? `From my search on the site: ${said.join(", ")}.` : null, summary };
+  return {
+    fields,
+    message: said.length ? { text: `From my search on the site: ${said.join(", ")}.`, labels } : null,
+  };
 }

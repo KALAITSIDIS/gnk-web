@@ -231,8 +231,10 @@ export function placeLine(l: Listing): string {
 /**
  * What a listing IS, in words: "Villa", "Land", "Villa development". The
  * first half of placeLine, on its own for the one other place that names the
- * kind without the place — the card's plate where a photograph would be.
- * One definition, so the plate can never call a development a villa.
+ * kind — the card's plate where a photograph would be. One definition, so
+ * the plate can never call a development a villa. The plate's place is
+ * deliberately shorter than placeLine's (the area alone, or the district),
+ * because the full line is printed in the card directly beneath it.
  */
 export function kindOf(l: Listing): string {
   const type = label(l.property_type);

@@ -159,30 +159,78 @@ export function EnquiryForm({
     return () => window.removeEventListener("hashchange", focusIfTargeted);
   }, [focusOnHash]);
 
+  /* THE BRIEF, STARTED FROM THE SEARCH. Each arrival at the brief's anchor
+     ("Send us this brief", on this page or from the home page) is one run.
+     A run writes the search into the fields that mean the same thing — but
+     only into a field that is empty, or that still holds what an earlier run
+     wrote: the visitor's own choices are never replaced, and a second search
+     replaces the first one's values instead of leaving them behind under a
+     note about the new one (review 2026-10-18). A run that finds the form
+     already SENT starts a fresh one with a new enquiry key — a second brief
+     is a second enquiry, not a retry of the first — instead of landing the
+     visitor on "Thank you — that has reached us." for a search not sent. */
+  const [briefRun, setBriefRun] = useState(0);
+  const lastBriefRun = useRef(0);
+  const ours = useRef(new Map<string, string>());
+  /* The send state, for the arrival handler below, which is registered once. */
+  const stateNow = useRef(state);
+  useEffect(() => {
+    stateNow.current = state;
+  }, [state]);
   useEffect(() => {
     if (!briefFromSearchOnHash || !focusOnHash) return;
-    const fill = () => {
-      const form = formRef.current;
-      if (!form || window.location.hash !== focusOnHash) return;
-      const field = (name: string) =>
-        form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
-      const areaSelect = field("buy_area");
-      const areaChoices =
-        areaSelect instanceof HTMLSelectElement ? [...areaSelect.options].map((o) => o.value).filter(Boolean) : [];
-      const brief = briefFromSearch(parseSearchState(new URLSearchParams(window.location.search)), areaChoices);
-      if (brief.summary.length === 0) return;
-      for (const [name, value] of Object.entries(brief.fields)) {
-        const el = field(name);
-        if (el && !el.value) el.value = value;
+    const arrive = () => {
+      if (window.location.hash !== focusOnHash) return;
+      if (stateNow.current === "sent") {
+        enquiryKey.current = crypto.randomUUID();
+        ours.current.clear();
+        setFromSearch(null);
+        setState("idle");
       }
-      const message = field("message");
-      if (brief.message && message && !message.value.trim()) message.value = brief.message;
-      setFromSearch(brief.summary);
+      setBriefRun((n) => n + 1);
     };
-    fill();
-    window.addEventListener("hashchange", fill);
-    return () => window.removeEventListener("hashchange", fill);
+    arrive();
+    window.addEventListener("hashchange", arrive);
+    return () => window.removeEventListener("hashchange", arrive);
   }, [briefFromSearchOnHash, focusOnHash]);
+
+  useEffect(() => {
+    if (briefRun === 0 || briefRun === lastBriefRun.current) return;
+    // Not mid-send; and a sent form was reset to idle by the arrival itself.
+    if (state !== "idle") return;
+    const form = formRef.current;
+    if (!form) return;
+    lastBriefRun.current = briefRun;
+    if (keyInput.current) keyInput.current.value = enquiryKey.current;
+
+    const field = (name: string) =>
+      form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+    const areaSelect = field("buy_area");
+    const areaChoices =
+      areaSelect instanceof HTMLSelectElement ? [...areaSelect.options].map((o) => o.value).filter(Boolean) : [];
+    const brief = briefFromSearch(parseSearchState(new URLSearchParams(window.location.search)), areaChoices);
+    /* Ours to write: empty, or still exactly what we wrote last time. */
+    const write = (el: { value: string } | null, name: string, value: string): boolean => {
+      if (!el) return false;
+      const mine = ours.current.get(name);
+      if (el.value !== "" && el.value !== mine) return false;
+      el.value = value;
+      if (value) ours.current.set(name, value);
+      else ours.current.delete(name);
+      return value !== "";
+    };
+    // What was actually written, and only that, is what the note names.
+    const filled: string[] = [];
+    for (const name of ["buy_property_type", "buy_area", "bedrooms_min"] as const) {
+      const f = brief.fields.find((x) => x.name === name);
+      if (write(field(name), name, f?.value ?? "") && f) filled.push(f.label);
+    }
+    if (write(field("message"), "message", brief.message?.text ?? "") && brief.message) {
+      filled.push(...brief.message.labels);
+    }
+    setFromSearch(filled.length > 0 ? filled : null);
+    nameRef.current?.focus({ preventScroll: true });
+  }, [briefRun, state]);
 
   /* An opener is appended, never substituted: a person who has typed
      something and then taps "Arrange a viewing" keeps what they wrote. */
@@ -316,10 +364,15 @@ export function EnquiryForm({
         <p className="eyebrow mt-2">Regarding {reference}</p>
       ) : null}
       {/* role="status": focus has gone to the name field, so the note is
-          announced rather than left for a screen reader to find. */}
-      {fromSearch ? (
-        <p role="status" className="mt-3 border-l-2 border-accent pl-3 text-sm text-ink-2">
-          Started from your search: {fromSearch.join(" · ")}. Change anything that is not right.
+          announced rather than left for a screen reader to find. The region
+          is in the page, empty, from the first render, and the note is
+          written INTO it: a status region inserted already filled is not
+          reliably announced (WCAG 4.1.3; review 2026-10-18). */}
+      {briefFromSearchOnHash ? (
+        <p role="status" className={fromSearch ? "mt-3 border-l-2 border-accent pl-3 text-sm text-ink-2" : "sr-only"}>
+          {fromSearch
+            ? `Started from your search: ${fromSearch.join(" · ")}. Change anything that is not right.`
+            : ""}
         </p>
       ) : null}
 

@@ -42,11 +42,24 @@ export function MenuAutoClose() {
       if (e.target instanceof Node && d.contains(e.target)) return;
       d.open = false;
     };
+    /* Tabbing out of the open panel. The panel overlays the page, so the
+       next focusable thing — the home page's ways in, the search box — took
+       focus UNDER it, invisible (WCAG 2.4.11; review 2026-10-18). Since the
+       menu now also serves 768–1023 px windows, a keyboard is likelier here
+       than it was. Focus moving anywhere outside the menu closes it. */
+    const onFocus = (e: FocusEvent) => {
+      const d = menu();
+      if (!d?.open) return;
+      if (e.target instanceof Node && d.contains(e.target)) return;
+      d.open = false;
+    };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("focusin", onFocus);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("focusin", onFocus);
     };
   }, []);
 

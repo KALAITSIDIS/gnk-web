@@ -14,6 +14,7 @@ import {
   priceStepsFor,
   resultCols,
   resultCountLabel,
+  resultSizes,
   salePrice,
   serializeSearchState,
   sortListings,
@@ -193,19 +194,6 @@ export function PropertySearch({
     return () => clearTimeout(t);
   }, [s]);
 
-  /* "Send us this brief", on the page that holds the brief form: write the
-     search to the URL NOW — the debounced write above may still be waiting —
-     and without a fragment, so that the link's own jump to #brief is a real
-     fragment navigation and fires the hashchange the form listens for, even
-     when the visitor was already at #brief. The form then reads the search
-     from the URL. Without JavaScript the link is a plain in-page jump. */
-  const writeSearchForBrief = () => {
-    const next = serializeSearchState(s);
-    window.history.replaceState(null, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
-    setSeenUrl(canonical(next));
-  };
-  const briefQuery = serializeSearchState(s);
-  const briefHref = briefOnPage ? "#brief" : `/properties${briefQuery ? `?${briefQuery}` : ""}#brief`;
 
   const types = useMemo(
     () => [...new Set(listings.map((l) => l.property_type).filter(Boolean))].sort(),
@@ -237,6 +225,23 @@ export function PropertySearch({
     }),
     [s, types, areas],
   );
+
+  /* "Send us this brief", on the page that holds the brief form: write the
+     search to the URL NOW — the debounced write above may still be waiting —
+     and without a fragment, so that the link's own jump to #brief is a real
+     fragment navigation and fires the hashchange the form listens for, even
+     when the visitor was already at #brief. The form then reads the search
+     from the URL. Without JavaScript the link is a plain in-page jump. */
+  /* `effective`, not `s`: a type or area the book does not hold is ignored by
+     the page (the bar reads "Any type"), so the brief must not carry it either
+     — it named a "House" search the visitor never saw (review 2026-10-18). */
+  const writeSearchForBrief = () => {
+    const next = serializeSearchState(effective);
+    window.history.replaceState(null, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
+    setSeenUrl(canonical(next));
+  };
+  const briefQuery = serializeSearchState(effective);
+  const briefHref = briefOnPage ? "#brief" : `/properties${briefQuery ? `?${briefQuery}` : ""}#brief`;
 
   // lib/search.ts — one predicate, shared with the empty state's suggestions.
   const results = useMemo(
@@ -297,8 +302,38 @@ export function PropertySearch({
   const set = <K extends keyof SearchState>(key: K, value: SearchState[K]) =>
     setS((current) => ({ ...current, [key]: value }));
 
+  /* WHERE FOCUS GOES when the button pressed removes itself. A chip, "Clear
+     all" and every button in the empty state disappear with the filter they
+     remove, and focus fell to <body>: a keyboard or screen-reader user was
+     returned to the top of the document (WCAG 2.4.3; review 2026-10-18).
+     After a chip: the next chip, or the search box once none is left. After
+     the empty state's suggestions: the first result, which is what was
+     asked for. Decided by the press, carried out after the render. */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const focusNext = useRef<"chip" | "result" | null>(null);
+  useEffect(() => {
+    const want = focusNext.current;
+    if (!want) return;
+    focusNext.current = null;
+    const root = rootRef.current;
+    if (!root) return;
+    const target =
+      (want === "chip" ? root.querySelector<HTMLElement>('[aria-label="Active filters"] button') : null) ??
+      (want === "result" ? root.querySelector<HTMLElement>("article a") : null) ??
+      root.querySelector<HTMLElement>('input[type="search"]');
+    target?.focus();
+  });
+  const removeChip = (key: keyof SearchState) => {
+    focusNext.current = "chip";
+    set(key, "" as never);
+  };
+  const clearAll = (then: "chip" | "result") => {
+    focusNext.current = then;
+    setS({ ...DEFAULT_SEARCH, sort: s.sort });
+  };
+
   return (
-    <div>
+    <div ref={rootRef}>
       <div className={`grid gap-3 border border-line bg-surface p-4 ${barCols}`}>
         <label className={searchSpan}>
           <span className="sr-only">Search by area, town or reference</span>
@@ -401,7 +436,10 @@ export function PropertySearch({
           empty result announced nothing at all (2026-10-18). The visible
           count stays, silent, beside the chips. */}
       <p className="sr-only" aria-live="polite" aria-atomic="true">
-        {filtering
+        {/* Nothing about filters while the feed is down: the page says the
+            listings are unavailable, and "no listings match" would blame
+            the visitor's search for the firm's outage (review 2026-10-18). */}
+        {filtering && !feedDown
           ? results.length > 0
             ? resultCountLabel(results.length)
             : "No listings match these filters"
@@ -417,7 +455,7 @@ export function PropertySearch({
             <button
               key={chip.key}
               type="button"
-              onClick={() => set(chip.key, "" as never)}
+              onClick={() => removeChip(chip.key)}
               aria-label={`Remove filter: ${chip.label}`}
               className="inline-flex min-h-11 items-center gap-1.5 border border-line-strong bg-surface px-3 text-ink-2 hover:border-accent hover:text-accent"
             >
@@ -427,7 +465,7 @@ export function PropertySearch({
           ))}
           <button
             type="button"
-            onClick={() => setS({ ...DEFAULT_SEARCH, sort: s.sort })}
+            onClick={() => clearAll("chip")}
             className="inline-flex min-h-11 items-center px-1 text-accent underline underline-offset-2 hover:text-accent-hover"
           >
             Clear all
@@ -459,7 +497,7 @@ export function PropertySearch({
       {results.length > 0 ? (
         <div className={`${showSort ? "mt-4" : "mt-8"} grid gap-6 ${resultCols(results.length)}`}>
           {results.map((l, i) => (
-            <PropertyCard key={l.reference} listing={l} priority={i < 3} />
+            <PropertyCard key={l.reference} listing={l} priority={i < 3} sizes={resultSizes(results.length)} />
           ))}
         </div>
       ) : (
@@ -485,7 +523,10 @@ export function PropertySearch({
                     <button
                       key={r.key}
                       type="button"
-                      onClick={() => set(r.key, "" as never)}
+                      onClick={() => {
+                        focusNext.current = "result";
+                        set(r.key, "" as never);
+                      }}
                       aria-label={`Remove filter: ${r.label}`}
                       className="inline-flex min-h-11 items-center gap-1.5 border border-line-strong bg-surface px-3 text-sm text-ink hover:border-accent hover:text-accent"
                     >
@@ -500,7 +541,7 @@ export function PropertySearch({
                 <p className="text-sm text-ink-2">No single change would show results.</p>
                 <button
                   type="button"
-                  onClick={() => setS({ ...DEFAULT_SEARCH, sort: s.sort })}
+                  onClick={() => clearAll("result")}
                   className="mt-3 inline-flex min-h-11 items-center border border-line-strong bg-surface px-4 text-sm text-ink hover:border-accent hover:text-accent"
                 >
                   Clear all filters

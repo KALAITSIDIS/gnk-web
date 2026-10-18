@@ -6,8 +6,10 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   ...pageMeta("/contact"),
   title: "Contact",
+  // Not "Two named advisers" (2026-10-18): lib/site.ts names nobody yet, and
+  // this is what a search result and a shared link show.
   description:
-    "Talk to GN Kalaitsidis Capital in Paphos, Cyprus. Two named advisers, direct — by phone, WhatsApp or email.",
+    "Talk to GN Kalaitsidis Capital in Paphos, Cyprus, by phone, WhatsApp or email. One of us will reply personally.",
 };
 
 /**

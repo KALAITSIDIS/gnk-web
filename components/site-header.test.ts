@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
@@ -183,12 +183,24 @@ describe("what a sticky header asks of the rest of the page", () => {
     expect(listing).not.toMatch(/\blg:top-8\b/);
   });
 
-  it("the valuation page's pinned form starts below the header too", () => {
-    // It carried lg:top-8 until 2026-10-18. It never stuck that day (the
-    // form is the taller column), but it would the day the copy grows.
-    const valuation = readFileSync(join(root, "app", "valuation", "page.tsx"), "utf-8");
-    expect(valuation).toMatch(/className="[^"]*\blg:sticky\b[^"]*\blg:top-2[0-9]\b/);
-    expect(valuation).not.toMatch(/\blg:top-8\b/);
+  it("every page's pinned column starts below the header, not only the listing page's", () => {
+    // /valuation and /selling both carried lg:top-8 until 2026-10-18 — the
+    // rule was fixed on one page and copied unfixed to two others. So every
+    // page under app/ is read, and every lg:sticky must clear the header.
+    const pages: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (p.endsWith(".tsx") && !p.endsWith(".test.tsx")) pages.push(p);
+      }
+    };
+    walk(join(root, "app"));
+    const pinned = pages.flatMap((p) =>
+      [...readFileSync(p, "utf-8").matchAll(/className="([^"]*\blg:sticky\b[^"]*)"/g)].map((m) => [p, m[1]!] as const),
+    );
+    expect(pinned.length, "the listing, valuation and selling pages pin a column").toBeGreaterThanOrEqual(3);
+    for (const [p, cls] of pinned) expect(cls, p).toMatch(/\blg:top-2[0-9]\b/);
   });
 
   it("the skip link has somewhere to land: main takes focus", () => {

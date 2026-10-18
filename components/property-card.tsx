@@ -51,10 +51,21 @@ import {
  * so nothing moves the day one arrives. Type and place are hidden from a
  * screen reader, which hears them in the price link; it hears the one fact
  * the plate adds. The frame is 3:2 — the shape of most property photography —
- * rather than 4:3: 29 px less on a phone, which is what puts the first price
- * on the first screen at 390 x 844.
+ * rather than 4:3: 29 px less on a phone, 32 px less at 1280. Measured with
+ * the new home page, the first price's bottom edge rose from 940 to 858 px at
+ * 390 x 844 and from 862 to 848 at 1280 x 800 — nearer the fold, not yet on
+ * the first screen.
  */
-export function PropertyCard({ listing, priority = false }: { listing: Listing; priority?: boolean }) {
+export function PropertyCard({
+  listing,
+  priority = false,
+  /* From the grid the card sits in (lib/search.ts resultSizes). */
+  sizes = "(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw",
+}: {
+  listing: Listing;
+  priority?: boolean;
+  sizes?: string;
+}) {
   const cover = coverImage(listing);
   const photos = listing.images?.length ?? 0;
   const view = text(listing.adviser_view);
@@ -83,7 +94,7 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
             alt={text(cover.alt) || titleOf(listing)}
             fill
             priority={priority}
-            sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
+            sizes={sizes}
             className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         ) : (
@@ -94,7 +105,12 @@ export function PropertyCard({ listing, priority = false }: { listing: Listing; 
               </p>
               {where ? <p className="mt-2 text-sm text-ink-2">{where}</p> : null}
             </div>
-            <p className="mt-4 border-t border-line-2 pt-3 text-sm text-ink-2">No photographs yet</p>
+            {/* Only when the feed holds none: a listing whose photographs
+                lack a card rendition (the feed contract allows a null) has
+                photographs, and the plate must not say otherwise. */}
+            {photos === 0 ? (
+              <p className="mt-4 border-t border-line-2 pt-3 text-sm text-ink-2">No photographs yet</p>
+            ) : null}
           </div>
         )}
 

@@ -19,7 +19,8 @@ export const metadata: Metadata = {
  * about it: Cyprus Resales routes its "Sell" nav item straight to a valuation
  * form, and BuySell puts two valuation funnels ABOVE its own 21,798 listings.
  *
- * One route only — a real valuation by a named person. Deliberately NOT an
+ * One route only — a real valuation by the person who would negotiate the
+ * sale. Deliberately NOT an
  * instant automated estimate: that needs a transaction database this firm does
  * not have, and it invites precisely the comparison it would lose.
  */

@@ -39,9 +39,8 @@ export default function AboutPage() {
         An independent practice, in a market that mostly is not.
       </h1>
       <p className="mt-4 max-w-2xl text-lg text-ink-2">
-        Developers sell the buildings they built. Portals are paid by whoever advertises. We
-        are paid by one client, on one side of one transaction, to say what we actually
-        think.
+        We are paid by one client, on one side of one transaction, to say what we actually
+        think — about the price, the paperwork, and whether to go ahead at all.
       </p>
 
       <section className="mt-14">

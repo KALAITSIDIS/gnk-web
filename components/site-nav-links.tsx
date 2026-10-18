@@ -35,8 +35,11 @@ export function SiteNavLinks({ variant }: { variant: "desktop" | "menu" }) {
         const weight = item.primary ? "font-medium text-ink" : "text-ink-2";
         const button = variant === "desktop" && item.cta;
         const className = button
-          ? `ml-1 inline-flex min-h-11 items-center border border-accent px-4 text-sm font-medium whitespace-nowrap text-accent transition-colors hover:bg-accent-soft ${
-              current ? "bg-accent-soft" : ""
+          ? /* Current is said the way every other item says it — the accent
+               underline — not by the hover tint alone, which measured
+               1.20:1 against the header (WCAG 1.4.1; review 2026-10-18). */
+            `ml-1 inline-flex min-h-11 items-center border border-accent px-4 text-sm font-medium whitespace-nowrap text-accent transition-colors hover:bg-accent-soft ${
+              current ? "underline decoration-accent decoration-2 underline-offset-4" : ""
             }`
           : variant === "desktop"
             ? `inline-flex min-h-11 items-center px-1 text-sm whitespace-nowrap transition-colors hover:text-accent ${weight} ${
