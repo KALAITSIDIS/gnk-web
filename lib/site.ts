@@ -34,6 +34,17 @@ export const site = {
   positioning:
     "Disciplined analysis, clear decision-making and hands-on execution across Cyprus real estate.",
 
+  /**
+   * What a valuation costs and commits the owner to, in ONE place: the
+   * valuation page states it, and the home page's selling band repeats it
+   * beside its button. Two sentences, never one: "cost nothing" alone, next
+   * to "Request a valuation", reads as a free written valuation — which the
+   * firm has not offered (the design review of 2026-10-18 caught a draft of
+   * the home page doing exactly that). Change the terms here or nowhere.
+   */
+  valuationTerms:
+    "The first conversation and an indicative view cost nothing and commit you to nothing. If you want the full written valuation with comparables, we will tell you the fee before we start.",
+
   contact: {
     email: "info@kalaitsidis.com",
     phone: "+357 94 000015",
@@ -142,7 +153,7 @@ export const site = {
       // Null, not a TODO string: a placeholder that is truthy renders, and both
       // of these were being served to the public as the principals' names and
       // as <h3> headings in the About page's document outline. Null lets the
-      // pages say "to follow" the way they already do for bio and photograph.
+      // pages draw nothing for them (app/placeholders.test.ts).
       name: null as string | null,
       role: null as string | null,
       bio: null as string | null,
@@ -175,13 +186,18 @@ export const ENQUIRY_RETENTION_MONTHS = 24;
    header and the phone menu set them heavier; the footer lists everything
    alike. One flag here, so the two navs cannot disagree (audit 2026-09-13:
    six equal items, no primary). */
+/* `cta` is a label for the ONE item the desktop header draws as a button
+   rather than a word: the seller's way in. A buyer's way in, Properties, is
+   the first word of the row and the search on the home page; a seller had
+   only a word set in medium weight among five others (2026-10-18). The phone
+   menu and the footer list it by `label` like everything else. */
 export const nav = [
-  { href: "/properties", label: "Properties", primary: true },
+  { href: "/properties", label: "Properties", primary: true, cta: null },
   // An owner deciding who to instruct had no route in: every other item here
   // addresses a buyer. Mandates are the revenue.
-  { href: "/selling", label: "Selling", primary: false },
-  { href: "/services", label: "Advisory", primary: false },
-  { href: "/valuation", label: "Valuation", primary: true },
-  { href: "/about", label: "About", primary: false },
-  { href: "/contact", label: "Contact", primary: false },
+  { href: "/selling", label: "Selling", primary: false, cta: null },
+  { href: "/services", label: "Advisory", primary: false, cta: null },
+  { href: "/valuation", label: "Valuation", primary: true, cta: "Request a valuation" },
+  { href: "/about", label: "About", primary: false, cta: null },
+  { href: "/contact", label: "Contact", primary: false, cta: null },
 ] as const;

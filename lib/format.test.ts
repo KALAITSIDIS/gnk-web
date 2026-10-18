@@ -211,7 +211,7 @@ describe("the cover photograph is the first one the feed sends", () => {
     expect(coverImage(l)?.card).toBe("cover.webp");
   });
 
-  it("is null with no photographs, so the page can say 'Photography to follow'", () => {
+  it("is null with no photographs, so the page can say there are no photographs yet", () => {
     expect(coverImage({ ...villa, images: [] } as unknown as Listing)).toBeNull();
     expect(coverImage({ ...villa, images: null } as unknown as Listing)).toBeNull();
   });
@@ -515,7 +515,7 @@ describe("the hero is the largest rendition, not the grid tile", () => {
     expect(heroImage(withImages([{ thumb: "t", card: "c" }]))).toBe("c");
   });
 
-  it("is null with no photographs, so the page can say 'Photography to follow'", () => {
+  it("is null with no photographs, so the page can say there are no photographs yet", () => {
     expect(heroImage(withImages([]))).toBeNull();
     expect(heroImage(withImages(null))).toBeNull();
   });

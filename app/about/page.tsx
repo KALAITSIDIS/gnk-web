@@ -6,8 +6,11 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   ...pageMeta("/about"),
   title: "About",
+  // Not "Two principals, named, on every mandate" (2026-10-18): lib/site.ts
+  // names nobody yet, and this line is what a search result and a shared link
+  // show — ahead of a page that, correctly, draws no name.
   description:
-    "An independent real estate advisory practice in Paphos. Two principals, named, on every mandate.",
+    "An independent real estate advisory practice in Paphos, run by its two principals.",
 };
 
 /**
@@ -36,9 +39,8 @@ export default function AboutPage() {
         An independent practice, in a market that mostly is not.
       </h1>
       <p className="mt-4 max-w-2xl text-lg text-ink-2">
-        Developers sell the buildings they built. Portals are paid by whoever advertises. We
-        are paid by one client, on one side of one transaction, to say what we actually
-        think.
+        We are paid by one client, on one side of one transaction, to say what we actually
+        think — about the price, the paperwork, and whether to go ahead at all.
       </p>
 
       <section className="mt-14">

@@ -1,5 +1,6 @@
 import type { Listing } from "@/lib/crm";
-import { bedroomsOf, isContainer, label, moneyShort, pricing, text } from "@/lib/format";
+import { bedroomsOf, isContainer, label, moneyShort, placeLine, pricing, text, titleOf } from "@/lib/format";
+import { PROPERTY_TYPES } from "@/lib/enquiry-fields";
 
 /**
  * The price ladder offered in the search bar.
@@ -128,11 +129,34 @@ export function matchesArea(l: Listing, area: string): boolean {
  * as deliberate, where a mostly-empty grid reads as a business with nothing
  * to sell. One rule for the search results and the listing page's onward
  * path, so the two grids can never disagree about what three cards look like.
+ *
+ * Three columns arrive at lg, not xl. Measured on production 2026-10-18: from
+ * 1024 to 1279 px the live book of three laid out two and one, the third card
+ * alone on its row under a gap — the shape this rule exists to prevent. A
+ * 1024 px column is 304 px wide, which the card's price and measurements fit.
+ * Four cards go two by two, then four across, so the orphan does not simply
+ * move to the fourth card.
  */
 export function resultCols(n: number): string {
   if (n === 1) return "md:grid-cols-[minmax(0,32rem)]";
   if (n === 2) return "sm:grid-cols-2";
-  return "sm:grid-cols-2 xl:grid-cols-3";
+  if (n === 4) return "sm:grid-cols-2 xl:grid-cols-4";
+  return "sm:grid-cols-2 lg:grid-cols-3";
+}
+
+/**
+ * The `sizes` a card's photograph is fetched at, for the grid resultCols
+ * draws for N cards — beside it so the two cannot disagree. The card used to
+ * carry one string written for a three-column grid, so a single result in its
+ * 32rem column asked for a third of the screen, and two results for a third
+ * where they get half (review 2026-10-18). The page is capped at max-w-7xl,
+ * so beyond 1280 the vw figures over-ask a little; never under.
+ */
+export function resultSizes(n: number): string {
+  if (n === 1) return "(max-width: 767px) 100vw, 32rem";
+  if (n === 2) return "(max-width: 639px) 100vw, 50vw";
+  if (n === 4) return "(max-width: 639px) 100vw, (max-width: 1279px) 50vw, 25vw";
+  return "(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw";
 }
 
 /**
@@ -235,4 +259,119 @@ export function activeFilters(s: SearchState): Array<{ key: keyof SearchState; l
   if (s.beds) chips.push({ key: "beds", label: `${s.beds}+ bedrooms` });
   if (s.max) chips.push({ key: "max", label: `Up to ${moneyShort(Number(s.max))}` });
   return chips;
+}
+
+/**
+ * Whether a listing passes every filter in a search state. The sort orders
+ * the result; it filters nothing, so it is not read here.
+ *
+ * It lived inline in the search component. It is here now because a second
+ * reader needs exactly the same answer: the empty state's suggestions ask
+ * "what would this search find without that one filter?", and a suggestion
+ * computed by a second copy of the predicate could promise results the grid
+ * then does not show.
+ */
+export function matchesSearch(l: Listing, s: SearchState): boolean {
+  if (s.type && l.property_type !== s.type) return false;
+  if (!matchesArea(l, s.area)) return false;
+  if (!matchesBedrooms(l, s.beds)) return false;
+  if (!matchesMaxPrice(l, s.max)) return false;
+  const needle = s.q.trim().toLowerCase();
+  if (needle) {
+    const hay = [
+      titleOf(l),
+      placeLine(l),
+      text(l.district),
+      text(l.area),
+      l.reference,
+      text(l.short_description),
+    ]
+      .join(" ")
+      .toLowerCase();
+    if (!hay.includes(needle)) return false;
+  }
+  return true;
+}
+
+/**
+ * When a search finds nothing: the filters whose removal, ALONE, would find
+ * something — most productive first, the chip order breaking ties.
+ *
+ * Offered as buttons the visitor chooses. Nothing is loosened for them: a
+ * search that quietly widens itself shows a buyer properties they said they
+ * did not want, under criteria they can no longer see. And no count is
+ * printed beside a suggestion. Removing the only filter on the page would
+ * count the whole book, which is the number the unfiltered view withholds
+ * on purpose (resultCountLabel above); a button that is only offered when
+ * it finds something already says what the visitor needs to know.
+ */
+export function relaxations(
+  listings: readonly Listing[],
+  s: SearchState,
+): Array<{ key: keyof SearchState; label: string }> {
+  return activeFilters(s)
+    .map((chip, order) => ({
+      chip,
+      order,
+      found: listings.filter((l) => matchesSearch(l, { ...s, [chip.key]: "" })).length,
+    }))
+    .filter((r) => r.found > 0)
+    .sort((a, b) => b.found - a.found || a.order - b.order)
+    .map((r) => r.chip);
+}
+
+/**
+ * A buyer's brief, started from the search they just ran.
+ *
+ * "Send us this brief" (the empty state on the home page and /properties)
+ * arrives at the brief form on /properties with the search in its URL. The
+ * three criteria that have a field of the same meaning fill it: the type,
+ * the area — only as one of the form's own options, `areaChoices` — and the
+ * minimum bedrooms. A price ceiling has NO such field: the brief asks for a
+ * budget band, and "up to €500k" does not say which band below it the buyer
+ * means, so it is written into the message in the buyer's own terms, with
+ * any typed words, rather than guessed into a band. Each part carries the
+ * words the form uses to tell the visitor what it filled — and the form says
+ * only what it actually wrote: it writes into a field only while that field
+ * is still empty, so a criterion it skipped is not named (review
+ * 2026-10-18: the note said "Villa" over a field the visitor had set to
+ * Apartment).
+ */
+export type BriefField = "buy_property_type" | "buy_area" | "bedrooms_min";
+
+export function briefFromSearch(
+  s: SearchState,
+  areaChoices: readonly string[],
+): {
+  fields: Array<{ name: BriefField; value: string; label: string }>;
+  message: { text: string; labels: string[] } | null;
+} {
+  const fields: Array<{ name: BriefField; value: string; label: string }> = [];
+  if (s.type && (PROPERTY_TYPES as readonly string[]).includes(s.type)) {
+    fields.push({ name: "buy_property_type", value: s.type, label: label(s.type) });
+  }
+  const area = s.area ? areaChoices.find((a) => a.toLowerCase() === s.area.toLowerCase()) : undefined;
+  if (area) fields.push({ name: "buy_area", value: area, label: area });
+  if (s.beds) fields.push({ name: "bedrooms_min", value: s.beds, label: `${s.beds}+ bedrooms` });
+  const said: string[] = [];
+  const labels: string[] = [];
+  /* An area the search offered but the brief's picker does not list (the
+     picker needs a district beside the area; the search does not) goes into
+     the message rather than being dropped. */
+  if (s.area && !area) {
+    said.push(`in ${s.area}`);
+    labels.push(s.area);
+  }
+  if (s.max) {
+    said.push(`up to ${moneyShort(Number(s.max))}`);
+    labels.push(`Up to ${moneyShort(Number(s.max))}`);
+  }
+  if (s.q) {
+    said.push(`“${s.q}”`);
+    labels.push(`“${s.q}”`);
+  }
+  return {
+    fields,
+    message: said.length ? { text: `From my search on the site: ${said.join(", ")}.`, labels } : null,
+  };
 }

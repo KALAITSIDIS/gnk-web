@@ -17,17 +17,32 @@ import { nav } from "@/lib/site";
  * Two signals, kept distinct: weight says "this is a conversion" (lib/site.ts
  * `primary`), the underline or bar says "this is where you are". A listing
  * page counts as being under Properties.
+ *
+ * On the desktop row the item with a `cta` label is drawn last, as an
+ * outlined button with that label: the reading items first, then the one
+ * thing a seller came to do. Outlined, not filled — the filled accent is
+ * kept for the page's own primary action, so the header never competes with
+ * the form or the search beneath it. The phone menu keeps the plain order.
  */
 export function SiteNavLinks({ variant }: { variant: "desktop" | "menu" }) {
   const pathname = usePathname() ?? "/";
+  const items =
+    variant === "desktop" ? [...nav.filter((i) => !i.cta), ...nav.filter((i) => i.cta)] : nav;
   return (
     <>
-      {nav.map((item) => {
+      {items.map((item) => {
         const current = pathname === item.href || pathname.startsWith(`${item.href}/`);
         const weight = item.primary ? "font-medium text-ink" : "text-ink-2";
-        const className =
-          variant === "desktop"
-            ? `inline-flex min-h-11 items-center px-1 text-sm transition-colors hover:text-accent ${weight} ${
+        const button = variant === "desktop" && item.cta;
+        const className = button
+          ? /* Current is said the way every other item says it — the accent
+               underline — not by the hover tint alone, which measured
+               1.20:1 against the header (WCAG 1.4.1; review 2026-10-18). */
+            `ml-1 inline-flex min-h-11 items-center border border-accent px-4 text-sm font-medium whitespace-nowrap text-accent transition-colors hover:bg-accent-soft ${
+              current ? "underline decoration-accent decoration-2 underline-offset-4" : ""
+            }`
+          : variant === "desktop"
+            ? `inline-flex min-h-11 items-center px-1 text-sm whitespace-nowrap transition-colors hover:text-accent ${weight} ${
                 current ? "text-ink underline decoration-accent decoration-2 underline-offset-8" : ""
               }`
             : `flex min-h-11 items-center text-base hover:text-accent ${weight} ${
@@ -40,7 +55,7 @@ export function SiteNavLinks({ variant }: { variant: "desktop" | "menu" }) {
             className={className.trim()}
             aria-current={current ? "page" : undefined}
           >
-            {item.label}
+            {button ? item.cta : item.label}
           </Link>
         );
         // The phone menu is a list; each item is its own row.

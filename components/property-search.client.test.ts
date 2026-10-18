@@ -65,13 +65,17 @@ const PAUSE_MS = 300;
 let root: Root;
 let container: HTMLDivElement;
 
-function mount(search = "") {
-  window.history.replaceState(null, "", search ? `/properties?${search}` : "/properties");
+function mount(
+  search = "",
+  props: { briefOnPage?: boolean; offList?: boolean; feedDown?: boolean; listings?: Listing[] } = {},
+  hash = "",
+) {
+  window.history.replaceState(null, "", (search ? `/properties?${search}` : "/properties") + hash);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(createElement(PropertySearch, { listings: BOOK }));
+    root.render(createElement(PropertySearch, { listings: BOOK, ...props }));
   });
 }
 
@@ -184,5 +188,181 @@ describe("the URL still leads when it is not the component's own write", () => {
 
     expect(select("type").value).toBe("land");
     expect(cards()).toEqual(["PAF0003"]);
+  });
+});
+
+/* ------------------------------------------------------------------------ *
+ * When nothing matches (2026-10-18).
+ *
+ * The empty state offered one way on — a link to /contact, a page with no
+ * brief on it — and said nothing about which choice had emptied the page.
+ * It now offers the filters whose removal alone would find something, as
+ * buttons the visitor presses; nothing is loosened for them. The count is
+ * announced from one live region that is always in the page. And the brief
+ * link carries the search with it.
+ * ------------------------------------------------------------------------ */
+const suggestionButtons = () =>
+  [...container.querySelectorAll<HTMLButtonElement>("div.text-center button")].map((b) => b.textContent!.replace("×", "").trim());
+const liveRegion = () => container.querySelector<HTMLElement>('[aria-live="polite"]')!;
+const briefLink = () =>
+  [...container.querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.getAttribute("href")!.endsWith("#brief"))!;
+
+describe("when nothing matches", () => {
+  it("offers the one filter whose removal finds something, and nothing else", () => {
+    // Villa + up to €250k: without the ceiling the villa is back; without
+    // the type, nothing in the book is that cheap either.
+    mount("type=villa&max=250000");
+    expect(cards()).toEqual([]);
+    expect(suggestionButtons()).toEqual(["Up to €250k"]);
+  });
+
+  it("removes that filter only when the visitor presses it, and keeps the other", () => {
+    mount("type=villa&max=250000");
+    act(() => {
+      container.querySelector<HTMLButtonElement>("div.text-center button")!.click();
+    });
+    expect(cards()).toEqual(["PAF0001"]);
+    expect(select("type").value).toBe("villa");
+    expect(select("max").value).toBe("");
+  });
+
+  it("offers clearing when no single change would help", () => {
+    mount("q=zzz&beds=9");
+    expect(cards()).toEqual([]);
+    expect(suggestionButtons()).toEqual(["Clear all filters"]);
+  });
+
+  it("shows a ceiling the bar does not offer in the select, instead of 'Any price' over an active filter", () => {
+    // The book's ladder is €500k and €750k; a shared link said €250k.
+    mount("max=250000");
+    expect(select("max").value).toBe("250000");
+    expect(select("max").selectedOptions[0]!.textContent).toBe("Up to €250k");
+  });
+});
+
+describe("the count is announced from one region that is always there", () => {
+  it("is present, and silent, before anything is filtered", () => {
+    mount();
+    expect(container.querySelectorAll('[aria-live="polite"]')).toHaveLength(1);
+    expect(liveRegion().textContent).toBe("");
+  });
+
+  it("says how many match, and says so when none do", () => {
+    mount();
+    const region = liveRegion();
+    choose("type", "villa");
+    expect(liveRegion()).toBe(region);
+    expect(region.textContent).toBe("1 listing matches");
+    choose("max", "500000");
+    choose("type", "land");
+    expect(region.textContent).toBe("No listings match these filters");
+  });
+});
+
+describe("the brief link carries the search", () => {
+  it("from another page, as the query of /properties#brief", () => {
+    mount("type=villa&max=250000");
+    expect(briefLink().getAttribute("href")).toBe("/properties?type=villa&max=250000#brief");
+    expect(briefLink().textContent).toBe("Send us this brief");
+  });
+
+  it("on /properties, as an in-page jump that writes the search to the URL first, even mid-debounce", () => {
+    mount("", { briefOnPage: true });
+    choose("type", "villa");
+    choose("max", "500000");
+    choose("area", "Kato Paphos");
+    // No pause: the debounced write has not landed yet.
+    expect(window.location.search).toBe("");
+    expect(briefLink().getAttribute("href")).toBe("#brief");
+    act(() => {
+      briefLink().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(window.location.search).toBe("?type=villa&area=Kato+Paphos&max=500000");
+  });
+});
+
+describe("focus after a button that removes itself (review 2026-10-18)", () => {
+  /* Each of these buttons disappears with the filter it removes. Focus used
+     to fall to <body>, returning a keyboard user to the top of the page. */
+  const chipButtons = () =>
+    [...container.querySelectorAll<HTMLButtonElement>('[aria-label="Active filters"] button')];
+
+  it("moves to the next chip, and to the search box when the last one goes", () => {
+    mount("type=villa&area=Peyia+%2F+Coral+Bay");
+    act(() => chipButtons()[0]!.click());
+    expect(document.activeElement).toBe(chipButtons()[0]);
+    expect(document.activeElement!.textContent).toContain("Peyia / Coral Bay");
+    act(() => chipButtons()[0]!.click());
+    expect(document.activeElement).toBe(searchBox());
+  });
+
+  it("moves to the first result after a suggestion in the empty state", () => {
+    mount("type=villa&max=250000");
+    act(() => container.querySelector<HTMLButtonElement>("div.text-center button")!.click());
+    expect(document.activeElement?.getAttribute("href")).toBe("/properties/PAF0001");
+  });
+});
+
+describe("what the review of 2026-10-18 found untested", () => {
+  it("announces nothing about filters during a feed outage", () => {
+    // The page says the listings are unavailable; "no listings match" would
+    // blame the visitor's search for the firm's outage.
+    mount("beds=3", { feedDown: true, listings: [] });
+    expect(liveRegion().textContent).toBe("");
+    expect(container.textContent).toContain("Our listings are briefly unavailable.");
+  });
+
+  it("shows a bedroom count the bar does not offer in its select, as it does a ceiling", () => {
+    mount("q=zzz&beds=9");
+    expect(select("beds").value).toBe("9");
+  });
+
+  it("keeps the fragment when the debounced write lands, so a visitor at #brief stays there", () => {
+    mount("", {}, "#brief");
+    choose("type", "villa");
+    pause();
+    expect(window.location.search).toBe("?type=villa");
+    expect(window.location.hash).toBe("#brief");
+  });
+
+  it("from #brief itself, clears the fragment before the jump, so the jump is a real fragment change the form hears", () => {
+    /* jsdom does not follow a link, so this pins the half that is code: the
+       click writes the NEW search with NO fragment and lets the link's own
+       "#brief" proceed — which a browser then performs as a fragment change,
+       firing the hashchange the brief form listens for even when the visitor
+       was already at #brief. The browser half was measured in Chrome
+       (Playwright, 2026-10-18): the form filled and took focus. */
+    mount("type=land", { briefOnPage: true }, "#brief");
+    choose("max", "500000"); // the plot is €780,000: nothing matches; no pause, the write is pending
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => {
+      briefLink().dispatchEvent(click);
+    });
+    expect(click.defaultPrevented, "the link's own navigation goes ahead").toBe(false);
+    expect(briefLink().getAttribute("href")).toBe("#brief");
+    expect(window.location.search).toBe("?type=land&max=500000");
+    expect(window.location.hash).toBe("");
+  });
+
+  it("carries the search the page applied, not a type the book does not hold", () => {
+    mount("type=penthouse&max=500000", { offList: true });
+    expect(select("type").value).toBe("");
+    expect(briefLink().getAttribute("href")).toBe("/properties?max=500000#brief");
+  });
+
+  it("closes a filtered list on the home page with a brief that carries the search", () => {
+    mount("type=villa", { offList: true });
+    const link = [...container.querySelectorAll<HTMLAnchorElement>("a")].find((a) =>
+      a.textContent!.includes("Send us this brief"),
+    )!;
+    expect(cards()).toEqual(["PAF0001"]);
+    expect(link.getAttribute("href")).toBe("/properties?type=villa#brief");
+    expect(container.textContent).toContain("Not on the list?");
+  });
+
+  it("sizes the search box to leave no select alone on a row: the whole first row for four selects", () => {
+    // BOOK offers type, area, beds and price: four selects, an even number.
+    mount();
+    expect(searchBox().closest("label")!.className).toMatch(/\bsm:col-span-2\b/);
   });
 });

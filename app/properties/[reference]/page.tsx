@@ -29,7 +29,7 @@ import { PropertyCard } from "@/components/property-card";
 import { JsonLd } from "@/components/json-ld";
 import { listingBreadcrumbs, listingJsonLd } from "@/lib/jsonld";
 import { relatedHeading, relatedListings } from "@/lib/related";
-import { resultCols } from "@/lib/search";
+import { resultCols, resultSizes } from "@/lib/search";
 import { absolute, OG_BASE } from "@/lib/site-url";
 import { site } from "@/lib/site";
 
@@ -254,46 +254,63 @@ export default async function PropertyPage({
         ) : null}
       </header>
 
-      <div className="mt-8 grid gap-3 md:grid-cols-[2fr_1fr]">
-        <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
-          {hero && cover ? (
-            <Image
-              src={hero}
-              alt={text(cover.alt) || titleOf(l)}
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 66vw"
-              className="object-cover"
-            />
-          ) : (
-            <span className="placeholder absolute inset-0 flex items-center justify-center text-sm">
-              Photography to follow
-            </span>
-          )}
-        </div>
-        {/* 3 columns on a phone, not 2: three tiles in a 2-column grid leave an
-            empty half-cell, and with a further row drawn beneath it that hole
-            sits in the MIDDLE of the gallery, where it reads as a photograph
-            that failed to load. Above md these stack in the hero's narrow
-            column as before. */}
-        {beside.length > 0 ? (
-          <div className="grid grid-cols-3 gap-3 md:grid-cols-1">
-            {beside.map((img, i) => (
-              <div key={i} className="relative aspect-[4/3] overflow-hidden bg-surface-2">
-                {img.card ? (
-                  <Image
-                    src={img.card}
-                    alt={text(img.alt) || `${titleOf(l)} — photograph ${i + 2}`}
-                    fill
-                    sizes="33vw"
-                    className="object-cover"
-                  />
-                ) : null}
-              </div>
-            ))}
+      {/* WITH NO PHOTOGRAPH, NO PICTURE FRAME. Measured on production
+          2026-10-18: the 4:3 box drawn for a missing photograph was the
+          largest thing on every listing page — 803 x 602 px of grey at 1280,
+          pushing the facts to 1,506 px — saying "Photography to follow" in
+          the middle, a promise app/placeholders.test.ts forbids pages to
+          make. Now the page says plainly that there are no photographs yet,
+          in one line, and offers the next step a buyer has without them; the
+          facts rise to where the photograph would have been. The moment the
+          feed carries a photograph, the gallery returns unchanged. Decided by
+          the photographs, not the cover's rendition: the feed contract allows
+          a photograph with no large rendition, and that listing HAS
+          photographs, so it keeps the gallery (its cover box stays plain). */}
+      {images.length > 0 ? (
+        <div className="mt-8 grid gap-3 md:grid-cols-[2fr_1fr]">
+          <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
+            {hero && cover ? (
+              <Image
+                src={hero}
+                alt={text(cover.alt) || titleOf(l)}
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 66vw"
+                className="object-cover"
+              />
+            ) : null}
           </div>
-        ) : null}
-      </div>
+          {/* 3 columns on a phone, not 2: three tiles in a 2-column grid leave an
+              empty half-cell, and with a further row drawn beneath it that hole
+              sits in the MIDDLE of the gallery, where it reads as a photograph
+              that failed to load. Above md these stack in the hero's narrow
+              column as before. */}
+          {beside.length > 0 ? (
+            <div className="grid grid-cols-3 gap-3 md:grid-cols-1">
+              {beside.map((img, i) => (
+                <div key={i} className="relative aspect-[4/3] overflow-hidden bg-surface-2">
+                  {img.card ? (
+                    <Image
+                      src={img.card}
+                      alt={text(img.alt) || `${titleOf(l)} — photograph ${i + 2}`}
+                      fill
+                      sizes="33vw"
+                      className="object-cover"
+                    />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="placeholder mt-8 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border border-line px-5 py-3 text-sm">
+          <span>No photographs yet.</span>
+          <a href="#enquire" className="inline-flex min-h-11 items-center font-medium text-accent hover:text-accent-hover">
+            Ask about it, or arrange a viewing →
+          </a>
+        </p>
+      )}
 
       {/* Same column count as the row above it at every width below lg, so the
           trailing photographs are drawn at the same size as the ones beside the
@@ -418,7 +435,7 @@ export default async function PropertyPage({
           </h2>
           <div className={`mt-6 grid gap-6 ${resultCols(related.length)}`}>
             {related.map((r) => (
-              <PropertyCard key={r.reference} listing={r} />
+              <PropertyCard key={r.reference} listing={r} sizes={resultSizes(related.length)} />
             ))}
           </div>
         </section>

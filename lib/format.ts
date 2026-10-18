@@ -223,12 +223,24 @@ export function label(token: string | null | undefined): string {
  * four places at once.
  */
 export function placeLine(l: Listing): string {
+  const what = kindOf(l);
+  const where = [text(l.area), text(l.district)].filter(Boolean).join(", ");
+  return where ? `${what} in ${where}` : what;
+}
+
+/**
+ * What a listing IS, in words: "Villa", "Land", "Villa development". The
+ * first half of placeLine, on its own for the one other place that names the
+ * kind — the card's plate where a photograph would be. One definition, so
+ * the plate can never call a development a villa. The plate's place is
+ * deliberately shorter than placeLine's (the area alone, or the district),
+ * because the full line is printed in the card directly beneath it.
+ */
+export function kindOf(l: Listing): string {
   const type = label(l.property_type);
   // No pluralisation: "Villa development" is right for every property_type the
   // CRM allows, where "Villas" would not be for land or plot.
-  const what = isContainer(l) ? (type ? `${type} development` : "Development") : type;
-  const where = [text(l.area), text(l.district)].filter(Boolean).join(", ");
-  return where ? `${what} in ${where}` : what;
+  return isContainer(l) ? (type ? `${type} development` : "Development") : type;
 }
 
 /**

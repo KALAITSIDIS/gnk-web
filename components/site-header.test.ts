@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
@@ -64,7 +64,7 @@ describe("the site header on a phone", () => {
     expect(details, "a <details> with a <summary> is rendered").not.toBeNull();
     expect(details![0]).toContain('aria-label="Main, mobile"');
     expect(details![0]).toMatch(/<summary[^>]*>[\s\S]*Menu/);
-    expect(details![0]).toMatch(/<details class="[^"]*\bmd:hidden\b/);
+    expect(details![0]).toMatch(/<details class="[^"]*\blg:hidden\b/);
   });
 
   it("never scrolls sideways and never hides an item behind a fade", () => {
@@ -88,8 +88,40 @@ describe("the site header on a phone", () => {
     for (const cls of controls) expect(cls, cls).toMatch(/\bmin-h-11\b/);
   });
 
-  it("hides the phone menu where the desktop nav takes over", () => {
-    expect(html).toMatch(/<nav aria-label="Main" class="[^"]*\bmd:flex\b/);
+  it("hides the phone menu exactly where the desktop nav takes over", () => {
+    const menu = /<details class="[^"]*\b(\w+):hidden\b/.exec(html)?.[1];
+    const row = /<nav aria-label="Main" class="[^"]*\bhidden\b[^"]*\b(\w+):flex\b/.exec(html)?.[1];
+    expect(menu, "the menu hides at a breakpoint").toBeDefined();
+    expect(row).toBe(menu);
+  });
+
+  it("keeps the menu on a tablet: the full row arrives at lg, not md", () => {
+    // Measured on production 2026-10-18: the md row needed 794 px, so from
+    // 768 to 799 px the number was cut off and the page scrolled sideways by
+    // up to 26 px. With the valuation button and WhatsApp it needs more.
+    expect(html).toMatch(/<nav aria-label="Main" class="[^"]*\blg:flex\b/);
+    expect(html).not.toMatch(/\bmd:flex\b|\bmd:hidden\b/);
+  });
+
+  it("lets the open menu scroll inside itself, since the header it hangs from never scrolls", () => {
+    const panel = /<\/summary>\s*<div class="([^"]*)"/.exec(html)?.[1] ?? "";
+    expect(panel).toMatch(/\bmax-h-\[calc\(100dvh-[^\]]+\)\]/);
+    expect(panel).toMatch(/\boverflow-y-auto\b/);
+  });
+
+  it("writes out every way to reach a person inside the menu", () => {
+    const panel = /<\/summary>([\s\S]*?)<\/details>/.exec(html)?.[1] ?? "";
+    expect(panel).toContain(`href="${site.contact.phoneHref}"`);
+    expect(panel).toContain(`Call ${site.contact.phone}`);
+    expect(panel).toContain(`href="${site.contact.whatsappHref}"`);
+    expect(panel).toContain(`href="mailto:${site.contact.email}"`);
+  });
+
+  it("puts WhatsApp in the top row from sm, beside the number", () => {
+    const topRow = html.slice(0, html.indexOf("<details"));
+    const wa = new RegExp(`<a href="${site.contact.whatsappHref}"[^>]*class="([^"]*)"`).exec(topRow);
+    expect(wa, "a WhatsApp link in the row").not.toBeNull();
+    expect(wa![1]).toMatch(/\bhidden\b[^"]*\bsm:inline-flex\b/);
   });
 });
 
@@ -118,6 +150,22 @@ describe("the two items that are conversions carry weight", () => {
       }
     }
   });
+
+  it("draws the seller's way in as the desktop row's one button, last, and lists it plainly in the menu", () => {
+    /* 2026-10-18: the valuation was one medium-weight word among six. The
+       desktop row now ends with it as an outlined button carrying an
+       action; the phone menu keeps the list as it was. */
+    const ctas = nav.filter((i) => i.cta);
+    expect(ctas.map((i) => i.href)).toEqual(["/valuation"]);
+    const desktop = /<nav aria-label="Main" [^>]*>([\s\S]*?)<\/nav>/.exec(html)![1]!;
+    const links = [...desktop.matchAll(/<a href="([^"]+)" class="([^"]*)"[^>]*>([^<]*)</g)];
+    const last = links.at(-1)!;
+    expect(last[1]).toBe("/valuation");
+    expect(last[3]).toBe(ctas[0]!.cta);
+    expect(last[2]).toMatch(/\bborder-accent\b/);
+    expect(links.filter((l) => /\bborder-accent\b/.test(l[2]!))).toHaveLength(1);
+    expect(mobileNav()).toMatch(/<a href="\/valuation" [^>]*>Valuation</);
+  });
 });
 
 describe("what a sticky header asks of the rest of the page", () => {
@@ -133,6 +181,26 @@ describe("what a sticky header asks of the rest of the page", () => {
     // lg:top-8 would slide the card beneath a sticky header on every scroll.
     expect(listing).toMatch(/id="enquire"[^>]*className="[^"]*\blg:top-2[0-9]\b/);
     expect(listing).not.toMatch(/\blg:top-8\b/);
+  });
+
+  it("every page's pinned column starts below the header, not only the listing page's", () => {
+    // /valuation and /selling both carried lg:top-8 until 2026-10-18 — the
+    // rule was fixed on one page and copied unfixed to two others. So every
+    // page under app/ is read, and every lg:sticky must clear the header.
+    const pages: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (p.endsWith(".tsx") && !p.endsWith(".test.tsx")) pages.push(p);
+      }
+    };
+    walk(join(root, "app"));
+    const pinned = pages.flatMap((p) =>
+      [...readFileSync(p, "utf-8").matchAll(/className="([^"]*\blg:sticky\b[^"]*)"/g)].map((m) => [p, m[1]!] as const),
+    );
+    expect(pinned.length, "the listing, valuation and selling pages pin a column").toBeGreaterThanOrEqual(3);
+    for (const [p, cls] of pinned) expect(cls, p).toMatch(/\blg:top-2[0-9]\b/);
   });
 
   it("the skip link has somewhere to land: main takes focus", () => {

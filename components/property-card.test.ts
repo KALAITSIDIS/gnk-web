@@ -84,3 +84,43 @@ describe("a property card", () => {
     expect(html).not.toMatch(/text-\[1[01]px\]/);
   });
 });
+
+describe("the plate where no photograph is (2026-10-18)", () => {
+  /* Set like the title page of a set of particulars: what it is and where,
+     then plainly that there are no photographs. One definition of what it
+     is (lib/format.ts kindOf), so a development is never called a villa. */
+  const plateOf = (h: string) => /<div class="placeholder[^"]*">([\s\S]*?)<\/div>\s*<\/div>/.exec(h)?.[1] ?? "";
+  const render = (over: Record<string, unknown>) =>
+    renderToStaticMarkup(createElement(PropertyCard, { listing: { ...villa, ...over } as unknown as Listing }));
+
+  it("names the kind and the place, hidden from a screen reader that hears both in the link, and says there are no photographs", () => {
+    const h = render({});
+    expect(h).toMatch(/<div aria-hidden="true"><p[^>]*>Villa<\/p><p[^>]*>Peyia \/ Coral Bay<\/p><\/div>/);
+    expect(h).toContain("No photographs yet");
+  });
+
+  it("calls a development a development, and draws no second Development badge over it", () => {
+    const h = render({ kind: "project" });
+    expect(h).toMatch(/<div aria-hidden="true"><p[^>]*>Villa development<\/p>/);
+    expect(h).not.toMatch(/>Development</);
+  });
+
+  it("falls back to the district when the listing has no area", () => {
+    const h = render({ area: null });
+    expect(h).toMatch(/<div aria-hidden="true"><p[^>]*>Villa<\/p><p[^>]*>Paphos<\/p><\/div>/);
+  });
+
+  it("never says 'no photographs' when the feed holds photographs without a card rendition", () => {
+    // The contract allows a null rendition (lib/feed-schema.ts); that listing
+    // HAS photographs, and the plate must not deny it.
+    const h = render({ images: [{ thumb: null, card: null, full: null, alt: {}, watermarked: false }] });
+    expect(h).not.toContain("No photographs yet");
+    expect(plateOf(h)).toContain("Villa");
+  });
+
+  it("is replaced by the photograph when there is one, in the same 3:2 box", () => {
+    const h = render({ images: [{ thumb: "t.jpg", card: "c.jpg", full: "f.jpg", alt: { en: "The terrace" }, watermarked: true }] });
+    expect(h).toMatch(/<div class="relative aspect-\[3\/2\][^"]*"><img src="c.jpg" alt="The terrace"/);
+    expect(h).not.toContain("No photographs yet");
+  });
+});
